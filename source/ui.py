@@ -20,9 +20,12 @@ class NA_PT_ArrangeSelected(NodePanel, Panel):
         scene = context.scene
         settings = scene.na_settings
 
-        layout.operator("node.na_arrange_selected")
+        layout.operator("node.na_old_arrange_selected", text="Arrange Selected (Old)")
+        layout.separator()
 
+        layout.operator("node.na_arrange_selected")
         layout.prop(settings, "margin")
+        layout.prop(settings, 'balance')
 
 
 class NA_PT_ClearLocations(NodePanel, Panel):
@@ -34,7 +37,7 @@ class NA_PT_ClearLocations(NodePanel, Panel):
         layout.operator("node.na_clear_locations")
 
 
-classes = [NA_PT_ArrangeSelected, NA_PT_ClearLocations]
+classes = (NA_PT_ArrangeSelected, NA_PT_ClearLocations)
 
 
 def register() -> None:
