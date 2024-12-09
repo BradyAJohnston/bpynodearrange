@@ -2,14 +2,16 @@
 
 # https://link.springer.com/chapter/10.1007/3-540-36151-0_26
 # https://doi.org/10.1016/j.jvlc.2013.11.005
+# https://link.springer.com/chapter/10.1007/978-3-540-31843-9_22
 # https://doi.org/10.7155/jgaa.00088
 
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Collection, Iterator, Sequence
 from dataclasses import dataclass, field, replace
 from functools import cache
-from itertools import chain
+from itertools import chain, pairwise
 from math import inf
 from random import seed, uniform
 
@@ -44,8 +46,13 @@ def topologically_sorted_clusters(LT: nx.DiGraph) -> list[Cluster]:
 @dataclass(slots=True)
 class ClusterCrossingsData:
     free_col: list[GNode | Cluster]
+
     fixed_sockets: dict[GNode, tuple[Socket, ...]] = field(default_factory=dict)
     free_sockets: dict[GNode | Cluster, tuple[Socket, ...]] = field(default_factory=dict)
+
+    constrained_clusters: list[Cluster] = field(default_factory=list)
+    graph: nx.DiGraph | None = None
+
     N: list[Socket] = field(default_factory=list)
     S: list[Socket] = field(default_factory=list)
     bipartite_edges: list[tuple[Socket, Socket, int]] = field(default_factory=list)
@@ -56,7 +63,7 @@ def crossing_reduction_data(
   trees: Sequence[nx.DiGraph],
   backwards: bool = False,
 ) -> Iterator[list[ClusterCrossingsData]]:
-    for LT in trees[1:]:
+    for i, LT in enumerate(trees[1:]):
         TC = reflexive_transitive_closure(LT)
         data = []
         for h in topologically_sorted_clusters(LT):
@@ -87,6 +94,12 @@ def crossing_reduction_data(
 
             for v in LT[h]:
                 H.free_sockets[v] = [e[2] for e in G_h.in_edges(v, data='from_socket')]
+
+            # -------------------------------------------------------------------
+
+            prev_clusters = set(trees[i]).difference(G)  # `trees[i]` is the previous tree
+            H.constrained_clusters.extend([v for v in H.free_col if v in prev_clusters])
+            H.graph = G_h
 
             # -------------------------------------------------------------------
 
@@ -157,6 +170,62 @@ def fill_in_unknown_barycenters(col: list[GNode], is_first_iter: bool) -> None:
         prev_b = col[i - 1].cr.barycenter if i != 0 else 0
         next_b = next((b for w in col[i + 1:] if (b := w.cr.barycenter) is not None), prev_b + 1)
         v.cr.barycenter = (prev_b + next_b) / 2
+
+
+def find_violated_constraint(GC: nx.DiGraph) -> tuple[GNode | Cluster, GNode | Cluster] | None:
+    active = [v for v in GC if GC[v] and not GC.pred[v]]
+    incoming_constraints = defaultdict(list)
+    while active:
+        v = active.pop(0)
+
+        for c in incoming_constraints[v]:
+            if c[0].cr.barycenter >= v.cr.barycenter:
+                return c
+
+        for t in GC[v]:
+            incoming_constraints[t].insert(0, (v, t))
+            if len(incoming_constraints[t]) == GC.in_degree[t]:
+                active.append(t)
+
+    return None
+
+
+def handle_constraints(H: ClusterCrossingsData) -> None:
+
+    # Optimization: don't pass constraints to `nx.DiGraph` constructor
+    GC = nx.DiGraph()
+    GC.add_edges_from(pairwise(H.constrained_clusters))
+
+    unconstrained = set(H.free_col).difference(GC)
+    node_lists = {v: [v] for v in H.free_col}
+
+    deg = {v: H.graph.degree[v] for v in GC}
+    while c := find_violated_constraint(GC):
+        vc = GNode(type=GNodeType.DUMMY)
+        s, t = c
+
+        deg[vc] = deg[s] + deg[t]
+        if deg[vc] > 0:
+            vc.cr.barycenter = (s.cr.barycenter * deg[s] + t.cr.barycenter * deg[t]) / deg[vc]
+        else:
+            vc.cr.barycenter = (s.cr.barycenter + t.cr.barycenter) / 2
+
+        node_lists[vc] = node_lists[s] + node_lists[t]
+
+        for u in *GC.pred[s], *GC.pred[t]:
+            GC.add_edge(u, vc)
+
+        GC.remove_nodes_from(c)
+
+        if (vc, vc) in GC.edges:
+            GC.remove_edge(vc, vc)
+
+        if vc not in GC:
+            unconstrained.add(vc)
+
+    groups = sorted(unconstrained.union(GC), key=lambda v: v.cr.barycenter)
+    for i, v in enumerate(chain(*[node_lists[v] for v in groups])):
+        v.cr.barycenter = i
 
 
 def get_cross_count(H: ClusterCrossingsData) -> int:
@@ -233,7 +302,7 @@ def sort_internal_columns(items: _FreeColumns) -> None:
 _ITERATIONS = 15
 
 
-def minimized_crossing_count(
+def minimized_cross_count(
   columns: Sequence[list[GNode]],
   forward_items: _FreeColumns,
   backward_items: _FreeColumns,
@@ -251,13 +320,22 @@ def minimized_crossing_count(
         if cross_count == 0:
             break
 
+        forwards = i % 2 == 0
+        items = forward_items if forwards else backward_items
         cross_count = 0
-        items = forward_items if i % 2 == 0 else backward_items
-        for base_free_col, LT, data in items:
+        for j, (base_free_col, LT, data) in enumerate(items):
+            if j == 0:
+                fixed_col = columns[0] if forwards else columns[-1]
+                key = [v.cluster for v in fixed_col].index
+            else:
+                key = lambda c: c.cr.barycenter
+
             for H in data:
-                calc_socket_ranks(H, i % 2 == 0)
+                H.constrained_clusters.sort(key=key)
+                calc_socket_ranks(H, forwards)
                 calc_barycenters(H)
                 fill_in_unknown_barycenters(H.free_col, i == 0)
+                handle_constraints(H)
                 cross_count += get_cross_count(H)
 
             root = topologically_sorted_clusters(LT)[0]
@@ -292,7 +370,7 @@ def minimize_crossings(G: nx.DiGraph, T: nx.DiGraph) -> None:
     best_cross_count = inf
     best_columns = [c.copy() for c in columns]
     for _ in range(_ITERATIONS):
-        cross_count = minimized_crossing_count(columns, forward_items, backward_items)
+        cross_count = minimized_cross_count(columns, forward_items, backward_items)
         if cross_count < best_cross_count:
             best_cross_count = cross_count
             best_columns = [c.copy() for c in columns]
