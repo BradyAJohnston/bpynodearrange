@@ -576,6 +576,10 @@ def realize_locations(G: nx.DiGraph, old_center: Vector) -> None:
 
 def sugiyama_layout(ntree: NodeTree) -> None:
     locs = [abs_loc(n) for n in config.selected if n.bl_idname != 'NodeFrame']
+
+    if not locs:
+        return
+
     old_center = Vector(map(fmean, zip(*locs)))
 
     precompute_links(ntree)
