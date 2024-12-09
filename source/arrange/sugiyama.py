@@ -335,15 +335,8 @@ def compute_ranks(CG: ClusterGraph) -> None:
         if v.cluster == root:
             continue
 
-        ranks = [w.rank for w in T[v.cluster] if w in G and G.degree[w] > 0]
-
-        if not ranks:
-            continue
-
-        min_rank = min(ranks) - 1
-        v.rank = min_rank - min_rank % k
-        if v.rank == min_rank:
-            v.rank -= k
+        if ranks := [w.rank for w in T[v.cluster] if w in G and G.degree[w] > 0]:
+            v.rank = min(ranks)
 
     # -------------------------------------------------------------------
 
