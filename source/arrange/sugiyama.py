@@ -196,15 +196,15 @@ class ClusterGraph:
         G = self.G
         columns = G.graph['columns']
         for c in self.S:
-            if not T.pred[c]:
+            if not c.node:
                 continue
 
-            nodes = [w for w in nx.descendants(T, c) if not T[w]]
+            nodes = [v for v in nx.descendants(T, c) if v in G]
             lower_border_nodes = []
             upper_border_nodes = []
-            for subcol in group_by(nodes, key=lambda w: columns.index(w.col), sort=True):
+            for subcol in group_by(nodes, key=lambda v: columns.index(v.col), sort=True):
                 col = subcol[0].col
-                indices = [col.index(w) for w in subcol]
+                indices = [col.index(v) for v in subcol]
 
                 lower_v = GNode(None, c, GNodeType.VERTICAL_BORDER)
                 col.insert(max(indices) + 1, lower_v)
