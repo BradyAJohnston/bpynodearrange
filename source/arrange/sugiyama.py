@@ -152,6 +152,8 @@ class ClusterGraph:
         G = self.G
         T = self.T
 
+        # -------------------------------------------------------------------
+
         long_edges = [(u, v, k) for u, v, k in G.edges(keys=True) if v.rank - u.rank > 1]
         pairs = {(u, v) for u, v, _ in long_edges if u.cluster != v.cluster}
         lca = dict(nx.tree_all_pairs_lowest_common_ancestor(T, pairs=pairs))
@@ -165,6 +167,29 @@ class ClusterGraph:
                 dummy_nodes.append(w)
 
             add_dummy_nodes_to_edge(G, (u, v, k), dummy_nodes)
+
+        # -------------------------------------------------------------------
+
+        for c in self.S:
+            if not c.node:
+                continue
+
+            ranks = sorted({v.rank for v in nx.descendants(T, c) if v in G})
+            for i, j in pairwise(ranks):
+                if j - i == 1:
+                    continue
+
+                u = None
+                for k in range(i + 1, j):
+                    v = GNode(None, c, GNodeType.VERTICAL_BORDER, k)
+                    T.add_edge(c, v)
+
+                    if u:
+                        add_dummy_edge(G, u, v)
+                    else:
+                        G.add_node(v)
+
+                    u = v
 
     def add_vertical_border_nodes(self) -> None:
         T = self.T
