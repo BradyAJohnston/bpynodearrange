@@ -212,11 +212,7 @@ def handle_constraints(H: ClusterCrossingsData) -> None:
 
         L[v_c] = L[s] + L[t]
 
-        for u in *GC.pred[s], *GC.pred[t]:
-            GC.add_edge(u, v_c)
-
-        GC.remove_nodes_from(c)
-
+        nx.relabel_nodes(GC, {s: v_c, t: v_c}, copy=False)
         if (v_c, v_c) in GC.edges:
             GC.remove_edge(v_c, v_c)
 
