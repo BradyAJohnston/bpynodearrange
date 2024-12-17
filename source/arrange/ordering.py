@@ -97,7 +97,7 @@ def crossing_reduction_data(
 
             # -------------------------------------------------------------------
 
-            prev_clusters = set(trees[i]).difference(G)  # `trees[i]` is the previous tree
+            prev_clusters = set(trees[i]) - G.nodes  # `trees[i]` is the previous tree
             H.constrained_clusters.extend([v for v in H.free_col if v in prev_clusters])
             H.graph = G_h
 
@@ -136,7 +136,7 @@ def calc_socket_ranks(H: ClusterCrossingsData, forwards: bool) -> None:
         incr = 1 / (len(sockets) + 1)
         rank = v.col.index(v) + 1
         if forwards:
-            incr *= -1
+            incr = -incr
 
         for socket in sockets:
             rank += incr
@@ -196,35 +196,35 @@ def handle_constraints(H: ClusterCrossingsData) -> None:
     GC = nx.DiGraph()
     GC.add_edges_from(pairwise(H.constrained_clusters))
 
-    unconstrained = set(H.free_col).difference(GC)
-    node_lists = {v: [v] for v in H.free_col}
+    unconstrained = set(H.free_col) - GC.nodes
+    L = {v: [v] for v in H.free_col}
 
     deg = {v: H.graph.degree[v] for v in GC}
     while c := find_violated_constraint(GC):
-        vc = GNode(type=GNodeType.DUMMY)
+        v_c = GNode(type=GNodeType.DUMMY)
         s, t = c
 
-        deg[vc] = deg[s] + deg[t]
-        if deg[vc] > 0:
-            vc.cr.barycenter = (s.cr.barycenter * deg[s] + t.cr.barycenter * deg[t]) / deg[vc]
+        deg[v_c] = deg[s] + deg[t]
+        if deg[v_c] > 0:
+            v_c.cr.barycenter = (s.cr.barycenter * deg[s] + t.cr.barycenter * deg[t]) / deg[v_c]
         else:
-            vc.cr.barycenter = (s.cr.barycenter + t.cr.barycenter) / 2
+            v_c.cr.barycenter = (s.cr.barycenter + t.cr.barycenter) / 2
 
-        node_lists[vc] = node_lists[s] + node_lists[t]
+        L[v_c] = L[s] + L[t]
 
         for u in *GC.pred[s], *GC.pred[t]:
-            GC.add_edge(u, vc)
+            GC.add_edge(u, v_c)
 
         GC.remove_nodes_from(c)
 
-        if (vc, vc) in GC.edges:
-            GC.remove_edge(vc, vc)
+        if (v_c, v_c) in GC.edges:
+            GC.remove_edge(v_c, v_c)
 
-        if vc not in GC:
-            unconstrained.add(vc)
+        if v_c not in GC:
+            unconstrained.add(v_c)
 
-    groups = sorted(unconstrained.union(GC), key=lambda v: v.cr.barycenter)
-    for i, v in enumerate(chain(*[node_lists[v] for v in groups])):
+    groups = sorted(unconstrained | GC.nodes, key=lambda v: v.cr.barycenter)
+    for i, v in enumerate(chain(*[L[v] for v in groups])):
         v.cr.barycenter = i
 
 
