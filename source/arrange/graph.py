@@ -46,6 +46,9 @@ class GNode:
     height: float
 
     rank: int | None
+    po_num: int | None
+    lowest_po_num: int | None
+
     col: list[GNode] | None
     cr: CrossingReduction
 
@@ -85,6 +88,9 @@ class GNode:
         else:
             self.width = 0
             self.height = 0
+
+        self.po_num = None
+        self.lowest_po_num = None
 
         self.col = None
         self.cr = CrossingReduction()

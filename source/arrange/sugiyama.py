@@ -18,6 +18,7 @@ from .graph import Cluster, GNode, GNodeType, Socket
 from .ordering import minimize_crossings
 from .placement.bk import bk_assign_y_coords
 from .placement.linear_segments import Segment, linear_segments_assign_y_coords
+from .ranking import compute_ranks
 
 # -------------------------------------------------------------------
 
@@ -135,18 +136,6 @@ class ClusterGraph:
 
             config.selected.remove(v.node)
             ntree.nodes.remove(v.node)
-
-    def nesting_graph(self) -> nx.DiGraph:
-        S = self.S
-        G = self.G
-        H = G.copy()
-        for u, v in self.T.edges:
-            if u in S and v in G:
-                H.add_edges_from(((u.left, v), (v, u.right)))
-            elif {u, v} <= S:
-                H.add_edges_from(((u.left, v.left), (v.right, u.right)))
-
-        return H
 
     def insert_dummy_nodes(self) -> None:
         G = self.G
@@ -315,68 +304,6 @@ def remove_reroutes(CG: ClusterGraph) -> None:
 # -------------------------------------------------------------------
 
 
-# https://api.semanticscholar.org/CorpusID:14932050
-def compute_ranks(CG: ClusterGraph) -> None:
-    G = CG.G
-    T = CG.T
-    S = CG.S
-    v: GNode
-
-    # -------------------------------------------------------------------
-
-    for i, layer in enumerate(nx.topological_generations(T)):
-        for c in S.intersection(layer):
-            c.nesting_level = i
-            c.left = GNode(None, c, GNodeType.HORIZONTAL_BORDER)
-            c.right = GNode(None, c, GNodeType.HORIZONTAL_BORDER)
-
-    # -------------------------------------------------------------------
-
-    H = CG.nesting_graph()
-    ordered = tuple(nx.topological_sort(H))
-    k = 2 * nx.dag_longest_path_length(T) - 1
-
-    for v in ordered:
-        rank = max([w.rank + 1 for w in H.pred[v]], default=0)
-        v.rank = ((rank + (k - 1)) // k) * k if v.type == GNodeType.NODE else rank
-
-    # -------------------------------------------------------------------
-
-    # https://doi.org/10.7155/jgaa.00448
-    for v in sorted(G, key=lambda v: v.rank, reverse=True):
-        if not G[v]:
-            continue
-
-        closest_succ_rank = min([w.rank for w in H[v]])
-        v.rank = closest_succ_rank - closest_succ_rank % k
-        if v.rank == closest_succ_rank:
-            v.rank -= k
-
-    # -------------------------------------------------------------------
-
-    root = next(c for c in S if not T.pred[c])
-
-    for v in nx.isolates(G):
-        if v.cluster == root:
-            continue
-
-        if ranks := [w.rank for w in T[v.cluster] if w in G and G.degree[w] > 0]:
-            v.rank = min(ranks)
-
-    # -------------------------------------------------------------------
-
-    for v in reversed(ordered):
-        u = v.cluster.left
-        u.rank = min([w.rank for w in H[u]]) - 1
-
-    # -------------------------------------------------------------------
-
-    H.remove_nodes_from((root.left, root.right))
-    for i, col in enumerate(group_by(H, key=lambda v: v.rank, sort=True)):
-        for v in col:
-            v.rank = i
-
-
 def add_columns(G: nx.DiGraph) -> None:
     columns = [list(c) for c in group_by(G, key=lambda v: v.rank, sort=True)]
     G.graph['columns'] = columns
@@ -466,9 +393,10 @@ def route_edges(
 def assign_x_coords_and_route_edges(G: nx.MultiDiGraph, T: nx.DiGraph) -> None:
     bend_points = defaultdict(list)
 
+    columns = G.graph['columns']
     x = 0
     edge_space_fac = min(1, _EDGE_SPACING / config.MARGIN.x)
-    for col in G.graph['columns']:
+    for i, col in enumerate(columns):
         max_width = max([v.width for v in col])
 
         for v in col:
@@ -480,8 +408,14 @@ def assign_x_coords_and_route_edges(G: nx.MultiDiGraph, T: nx.DiGraph) -> None:
               abs(d['to_socket'].y - d['from_socket'].y) for *_, d in G.out_edges(v, data=True)])
             route_edges(G, v, bend_points)
 
-        margin = _FRAME_PADDING if all(v.type != GNodeType.NODE for v in col) else config.MARGIN.x
-        x += max_width + _COL_SPACE_FAC * edge_space_fac * max(y_diffs, default=0) + margin
+        max_y_diff = max(y_diffs, default=0)
+        x += max_width + _COL_SPACE_FAC * edge_space_fac * max_y_diff + config.MARGIN.x
+
+        if col == columns[-1]:
+            continue
+
+        if {v.cluster for v in col} ^ {v.cluster for v in columns[i + 1]}:
+            x += _FRAME_PADDING
 
     # -------------------------------------------------------------------
 
