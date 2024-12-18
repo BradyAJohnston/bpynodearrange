@@ -315,8 +315,8 @@ def add_columns(G: nx.DiGraph) -> None:
 # -------------------------------------------------------------------
 
 _EDGE_SPACING = 10
-_MIN_X_DIFF = 7
-_MIN_Y_DIFF = 3.5
+_MIN_X_DIFF = 30
+_MIN_Y_DIFF = 15
 _FRAME_PADDING = 29.8
 _COL_SPACE_FAC = 0.4
 
