@@ -20,9 +20,6 @@ class NA_PT_ArrangeSelected(NodePanel, Panel):
         scene = context.scene
         settings = scene.na_settings
 
-        layout.operator("node.na_old_arrange_selected", text="Arrange Selected (Old)")
-        layout.separator()
-
         layout.operator("node.na_arrange_selected")
         layout.prop(settings, "margin")
         layout.prop(settings, 'balance')
