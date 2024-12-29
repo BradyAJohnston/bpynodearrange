@@ -9,5 +9,5 @@ from .properties import NA_PG_Settings
 
 selected: list[Node] = []
 linked_sockets: defaultdict[NodeSocket, set[NodeSocket]] = defaultdict(set)
-SETTINGS: NA_PG_Settings | None = None
-MARGIN: Vector | None = None
+SETTINGS: NA_PG_Settings
+MARGIN: Vector

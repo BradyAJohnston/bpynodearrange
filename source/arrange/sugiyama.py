@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
 from itertools import chain, pairwise
 from statistics import fmean
+from typing import cast
 
-import bpy
 import networkx as nx
-from bpy.types import NodeTree
+from bpy.types import Node, NodeFrame, NodeTree
 from mathutils import Vector
 
 from .. import config
-from ..utils import abs_loc, group_by
-from .graph import Cluster, GNode, GNodeType, Socket
+from ..utils import abs_loc, get_ntree, group_by, move
+from .graph import Cluster, GNode, GType, Socket, is_real
 from .ordering import minimize_crossings
 from .placement.bk import bk_assign_y_coords
 from .placement.linear_segments import Segment, linear_segments_assign_y_coords
@@ -33,8 +33,8 @@ def precompute_links(ntree: NodeTree) -> None:
             config.linked_sockets[link.from_socket].add(link.to_socket)
 
 
-def get_multidigraph() -> nx.MultiDiGraph:
-    parents = {n.parent: Cluster(n.parent) for n in config.selected}
+def get_multidigraph() -> nx.MultiDiGraph[GNode]:
+    parents = {n.parent: Cluster(cast(NodeFrame | None, n.parent)) for n in config.selected}
     for c in parents.values():
         if c.node:
             c.cluster = parents[c.node.parent]
@@ -64,12 +64,12 @@ def get_nesting_relations(v: GNode | Cluster) -> Iterator[tuple[Cluster, GNode |
 # -------------------------------------------------------------------
 
 
-def add_dummy_edge(G: nx.DiGraph, u: GNode, v: GNode) -> None:
+def add_dummy_edge(G: nx.DiGraph[GNode], u: GNode, v: GNode) -> None:
     G.add_edge(u, v, from_socket=Socket(u, 0, True), to_socket=Socket(v, 0, False))
 
 
 def add_dummy_nodes_to_edge(
-  G: nx.MultiDiGraph,
+  G: nx.MultiDiGraph[GNode],
   edge: tuple[GNode, GNode, int],
   dummy_nodes: Sequence[GNode],
 ) -> None:
@@ -80,7 +80,7 @@ def add_dummy_nodes_to_edge(
         add_dummy_edge(G, *pair)
 
     u, v, _ = edge
-    d = G.edges[edge]
+    d = G.edges[edge]  # type: ignore
 
     w = dummy_nodes[0]
     G.add_edge(u, w, from_socket=d['from_socket'], to_socket=Socket(w, 0, False))
@@ -90,10 +90,10 @@ def add_dummy_nodes_to_edge(
 
     G.remove_edge(*edge)
 
-    if not u.is_real or not v.is_real:
+    if not is_real(u) or not is_real(v):
         return
 
-    links = bpy.context.space_data.edit_tree.links
+    links = get_ntree().links
     if d['to_socket'].bpy.is_multi_input:
         target_link = (d['from_socket'].bpy, d['to_socket'].bpy)
         links.remove(next(l for l in links if (l.from_socket, l.to_socket) == target_link))
@@ -104,26 +104,25 @@ def add_dummy_nodes_to_edge(
 
 # https://api.semanticscholar.org/CorpusID:14932050
 class ClusterGraph:
-    G: nx.MultiDiGraph
-    T: nx.DiGraph
+    G: nx.MultiDiGraph[GNode]
+    T: nx.DiGraph[GNode | Cluster]
     S: set[Cluster]
     __slots__ = tuple(__annotations__)
 
-    def __init__(self, G: nx.MultiDiGraph) -> None:
+    def __init__(self, G: nx.MultiDiGraph[GNode]) -> None:
         self.G = G
         self.T = nx.DiGraph(chain(*map(get_nesting_relations, G)))
-        self.S = {v for v in self.T if v.type == GNodeType.CLUSTER}
+        self.S = {v for v in self.T if v.type == GType.CLUSTER}
 
     def remove_nodes_from(self, nodes: Iterable[GNode]) -> None:
-        ntree = bpy.context.space_data.edit_tree
-
+        ntree = get_ntree()
         for v in nodes:
             self.G.remove_node(v)
             self.T.remove_node(v)
             if v.col:
                 v.col.remove(v)
 
-            if not v.is_real:
+            if not is_real(v):
                 continue
 
             sockets = {*v.node.inputs, *v.node.outputs}
@@ -149,9 +148,10 @@ class ClusterGraph:
 
         for u, v, k in long_edges:
             c = lca[(u, v)] if (u, v) in pairs else u.cluster
+            assert isinstance(c, Cluster)
             dummy_nodes = []
             for i in range(u.rank + 1, v.rank):
-                w = GNode(None, c, GNodeType.DUMMY, i)
+                w = GNode(f"DUMMY-{dummy_count}", c, GType.DUMMY, i)
                 T.add_edge(c, w)
                 dummy_nodes.append(w)
 
@@ -163,14 +163,14 @@ class ClusterGraph:
             if not c.node:
                 continue
 
-            ranks = sorted({v.rank for v in nx.descendants(T, c) if v in G})
+            ranks = sorted({v.rank for v in nx.descendants(T, c) if v.type != GType.CLUSTER})
             for i, j in pairwise(ranks):
                 if j - i == 1:
                     continue
 
                 u = None
                 for k in range(i + 1, j):
-                    v = GNode(None, c, GNodeType.VERTICAL_BORDER, k)
+                    v = GNode(None, c, GType.VERTICAL_BORDER, k)
                     T.add_edge(c, v)
 
                     if u:
@@ -188,20 +188,20 @@ class ClusterGraph:
             if not c.node:
                 continue
 
-            nodes = [v for v in nx.descendants(T, c) if v in G]
+            nodes = [v for v in nx.descendants(T, c) if v.type != GType.CLUSTER]
             lower_border_nodes = []
             upper_border_nodes = []
             for subcol in group_by(nodes, key=lambda v: columns.index(v.col), sort=True):
                 col = subcol[0].col
                 indices = [col.index(v) for v in subcol]
 
-                lower_v = GNode(None, c, GNodeType.VERTICAL_BORDER)
+                lower_v = GNode(None, c, GType.VERTICAL_BORDER)
                 col.insert(max(indices) + 1, lower_v)
                 lower_v.col = col
                 T.add_edge(c, lower_v)
                 lower_border_nodes.append(lower_v)
 
-                upper_v = GNode(None, c, GNodeType.VERTICAL_BORDER)
+                upper_v = GNode(None, c, GType.VERTICAL_BORDER)
                 col.insert(min(indices), upper_v)
                 upper_v.col = col
                 T.add_edge(c, upper_v)
@@ -215,21 +215,21 @@ class ClusterGraph:
 # -------------------------------------------------------------------
 
 
-def get_reroute_paths(G: nx.DiGraph, function: Callable | None = None) -> list[list[GNode]]:
+def get_reroute_paths(G: nx.DiGraph[GNode], function: Callable | None = None) -> list[list[GNode]]:
     reroutes = [v for v in G if v.is_reroute and (not function or function(v))]
     SG = nx.DiGraph(G.subgraph(reroutes))
     for v in SG:
-        if G.out_degree(v) > 1:
+        if G.out_degree[v] > 1:
             SG.remove_edges_from(tuple(SG.out_edges(v)))
 
     indicies = {v: i for i, v in enumerate(nx.topological_sort(G)) if v in reroutes}
-    paths = [sorted(c, key=indicies.get) for c in nx.weakly_connected_components(SG)]
+    paths = [sorted(c, key=lambda v: indicies[v]) for c in nx.weakly_connected_components(SG)]
     paths.sort(key=lambda p: indicies[p[0]])
     return paths
 
 
 def is_safe_to_remove(v: GNode) -> bool:
-    if not v.is_real:
+    if not is_real(v):
         return True
 
     return all(
@@ -264,7 +264,7 @@ def get_reroute_segments(CG: ClusterGraph) -> list[list[GNode]]:
     return sorted(map(list, reroute_segments), key=lambda s: order.index(s[0]))
 
 
-def dissolve_reroute_edges(G: nx.DiGraph, path: list[GNode]) -> None:
+def dissolve_reroute_edges(G: nx.DiGraph[GNode], path: list[GNode]) -> None:
     if not G[path[-1]]:
         return
 
@@ -282,14 +282,16 @@ def dissolve_reroute_edges(G: nx.DiGraph, path: list[GNode]) -> None:
             path.clear()
             return
 
-    links = bpy.context.space_data.edit_tree.links
+    links = get_ntree().links
     for i in succ_inputs:
         G.add_edge(u, i.owner, from_socket=o, to_socket=i)
         links.new(o.bpy, i.bpy)
 
 
 def remove_reroutes(CG: ClusterGraph) -> None:
-    reroute_clusters = {c for c in CG.S if all(v.is_reroute for v in CG.T[c] if not CG.T[v])}
+    reroute_clusters = {#
+      c for c in CG.S
+      if all(v.is_reroute for v in CG.T[c] if v.type != GType.CLUSTER)}
     for path in get_reroute_segments(CG):
         if path[0].cluster in reroute_clusters:
             if len(path) > 2:
@@ -304,7 +306,7 @@ def remove_reroutes(CG: ClusterGraph) -> None:
 # -------------------------------------------------------------------
 
 
-def add_columns(G: nx.DiGraph) -> None:
+def add_columns(G: nx.DiGraph[GNode]) -> None:
     columns = [list(c) for c in group_by(G, key=lambda v: v.rank, sort=True)]
     G.graph['columns'] = columns
     for col in columns:
@@ -321,7 +323,7 @@ _FRAME_PADDING = 29.8
 _COL_SPACE_FAC = 0.4
 
 
-def align_reroutes_with_sockets(G: nx.DiGraph) -> None:
+def align_reroutes_with_sockets(G: nx.DiGraph[GNode]) -> None:
     reroute_paths: dict[tuple[GNode, ...], list[Socket]] = {}
     for path in get_reroute_paths(G):
         for subpath in group_by(path, key=lambda v: v.y):
@@ -365,14 +367,14 @@ def align_reroutes_with_sockets(G: nx.DiGraph) -> None:
 
 
 def route_edges(
-  G: nx.MultiDiGraph,
+  G: nx.MultiDiGraph[GNode],
   v: GNode,
   bend_points: defaultdict[tuple[GNode, GNode, int], list[GNode]],
 ) -> None:
     col_right = max([w.x + w.width for w in v.col])
     for u, w, k, d in *G.in_edges(v, data=True, keys=True), *G.out_edges(v, data=True, keys=True):
         socket = d['from_socket'] if v == u else d['to_socket']
-        z = GNode(type=GNodeType.DUMMY)
+        z = GNode(node='BEND-POINT', type=GType.DUMMY)
         z.x = col_right if socket.is_output else v.x
 
         if abs(socket.x() - z.x) <= _MIN_X_DIFF:
@@ -390,7 +392,10 @@ def route_edges(
             bend_points[u, w, k].append(z)
 
 
-def assign_x_coords_and_route_edges(G: nx.MultiDiGraph, T: nx.DiGraph) -> None:
+def assign_x_coords_and_route_edges(
+  G: nx.MultiDiGraph[GNode],
+  T: nx.DiGraph[GNode | Cluster],
+) -> None:
     bend_points = defaultdict(list)
 
     columns = G.graph['columns']
@@ -449,7 +454,7 @@ def simplify_segment(CG: ClusterGraph, aligned: Sequence[GNode], path: list[GNod
     if (s := next(iter(G.in_edges(u, data='from_socket')))[2]).y == u.y:
         G.add_edge(s.owner, v, from_socket=s, to_socket=Socket(v, 0, False))
         between.append(u)
-    elif G.out_degree(v) == 1 and v.y == (s := next(iter(G.out_edges(v, data='to_socket')))[2]).y:
+    elif G.out_degree[v] == 1 and v.y == (s := next(iter(G.out_edges(v, data='to_socket')))[2]).y:
         G.add_edge(u, s.owner, from_socket=Socket(u, 0, True), to_socket=s)
         between.append(v)
     else:
@@ -462,22 +467,24 @@ def simplify_segment(CG: ClusterGraph, aligned: Sequence[GNode], path: list[GNod
 
 
 def add_reroute(v: GNode) -> None:
-    reroute = bpy.context.space_data.edit_tree.nodes.new(type='NodeReroute')
+    reroute = get_ntree().nodes.new(type='NodeReroute')
+    assert v.cluster
     reroute.parent = v.cluster.node
     config.selected.append(reroute)
     v.node = reroute
-    v.type = GNodeType.NODE
+    v.type = GType.NODE
 
 
-def realize_edges(G: nx.DiGraph, v: GNode) -> None:
-    links = bpy.context.space_data.edit_tree.links
+def realize_edges(G: nx.DiGraph[GNode], v: GNode) -> None:
+    assert is_real(v)
+    links = get_ntree().links
 
     if G.pred[v]:
         pred_output = next(iter(G.in_edges(v, data='from_socket')))[2]
         links.new(pred_output.bpy, v.node.inputs[0])
 
     for _, w, succ_input in G.out_edges(v, data='to_socket'):
-        if w.is_real:
+        if is_real(w):
             links.new(v.node.outputs[0], succ_input.bpy)
 
 
@@ -487,18 +494,19 @@ def realize_dummy_nodes(CG: ClusterGraph) -> None:
             simplify_segment(CG, aligned, path)
 
         for v in path:
-            if not v.is_real:
+            if not is_real(v):
                 add_reroute(v)
 
             realize_edges(CG.G, v)
 
 
-def realize_locations(G: nx.DiGraph, old_center: Vector) -> None:
+def realize_locations(G: nx.DiGraph[GNode], old_center: Vector) -> None:
     new_center = (fmean([v.x for v in G]), fmean([v.y for v in G]))
     offset_x, offset_y = -Vector(new_center) + old_center
 
-    v: GNode
     for v in G:
+        assert isinstance(v.node, Node)
+        assert v.cluster
         # Optimization: avoid using bpy.ops for as many nodes as possible (see `utils.move()`)
         v.node.parent = None
 
@@ -536,7 +544,7 @@ def sugiyama_layout(ntree: NodeTree) -> None:
     else:
         CG.add_vertical_border_nodes()
         linear_segments_assign_y_coords(CG)
-        CG.remove_nodes_from([v for v in G if v.type == GNodeType.VERTICAL_BORDER])
+        CG.remove_nodes_from([v for v in G if v.type == GType.VERTICAL_BORDER])
 
     align_reroutes_with_sockets(G)
     assign_x_coords_and_route_edges(G, CG.T)

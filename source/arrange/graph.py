@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import cached_property
 from math import inf
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, TypeGuard, cast
 
 from bpy.types import Node, NodeFrame, NodeSocket
 from mathutils import Vector
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from .placement.linear_segments import Segment
 
 
-class GNodeType(Enum):
+class GType(Enum):
     NODE = auto()
     DUMMY = auto()
     CLUSTER = auto()
@@ -36,30 +36,37 @@ class CrossingReduction:
         self.barycenter = None
 
 
+_NonCluster = Literal[GType.NODE, GType.DUMMY, GType.HORIZONTAL_BORDER, GType.VERTICAL_BORDER]
+
+
+def is_real(v: GNode | Cluster) -> TypeGuard[_RealGNode]:
+    return isinstance(v.node, Node)
+
+
 class GNode:
-    node: Node | None
+    node: Node | str | None
     cluster: Cluster | None
-    type: GNodeType
+    type: _NonCluster
 
     is_reroute: bool
     width: float
     height: float
 
-    rank: int | None
-    po_num: int | None
-    lowest_po_num: int | None
+    rank: int
+    po_num: int
+    lowest_po_num: int
 
-    col: list[GNode] | None
+    col: list[GNode]
     cr: CrossingReduction
 
-    x: float | None
-    y: float | None
+    x: float
+    y: float
 
     segment: Segment | GNode
 
     root: GNode
     aligned: GNode
-    cells: tuple[list[int], list[float]]
+    cells: tuple[list[int], list[float]] | None
     sink: GNode
     shift: float
 
@@ -67,45 +74,42 @@ class GNode:
 
     def __init__(
       self,
-      node: Node | None = None,
+      node: Node | str | None = None,
       cluster: Cluster | None = None,
-      type: GNodeType = GNodeType.NODE,
+      type: _NonCluster = GType.NODE,
       rank: int | None = None,
     ) -> None:
+        real = isinstance(node, Node)
+
         self.node = node
         self.cluster = cluster
         self.type = type
-        self.rank = rank
-        self.is_reroute = type == GNodeType.DUMMY or (
-          self.is_real and node.bl_idname == 'NodeReroute')
+        self.rank = rank  # type: ignore
+        self.is_reroute = type == GType.DUMMY or (real and node.bl_idname == 'NodeReroute')
 
         if self.is_reroute:
             self.width = REROUTE_DIM.x
             self.height = REROUTE_DIM.y
-        elif self.is_real:
+        elif real:
             self.width = dimensions(node).x
             self.height = get_top(node) - get_bottom(node)
         else:
             self.width = 0
             self.height = 0
 
-        self.po_num = None
-        self.lowest_po_num = None
+        self.po_num = None  # type: ignore
+        self.lowest_po_num = None  # type: ignore
 
-        self.col = None
+        self.col = None  # type: ignore
         self.cr = CrossingReduction()
 
-        self.x = None
+        self.x = None  # type: ignore
         self.reset()
 
         self.segment = self
 
     def __hash__(self) -> int:
         return id(self)
-
-    @property
-    def is_real(self) -> bool:
-        return isinstance(self.node, Node)
 
     def reset(self) -> None:
         self.root = self
@@ -114,28 +118,36 @@ class GNode:
 
         self.sink = self
         self.shift = inf
-        self.y = None
+        self.y = None  # type: ignore
 
     def corrected_y(self) -> float:
+        assert is_real(self)
         return self.y + (abs_loc(self.node).y - get_top(self.node))
+
+
+class _RealGNode(GNode):
+    node: Node  # type: ignore
 
 
 @dataclass(slots=True)
 class Cluster:
     node: NodeFrame | None
     cluster: Cluster | None = None
-
     nesting_level: int | None = None
-    left: GNode | None = None
-    right: GNode | None = None
     cr: CrossingReduction = field(default_factory=CrossingReduction)
+    left: GNode = field(init=False)
+    right: GNode = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.left = GNode(None, self, GType.HORIZONTAL_BORDER)
+        self.right = GNode(None, self, GType.HORIZONTAL_BORDER)
 
     def __hash__(self) -> int:
         return id(self)
 
     @property
-    def type(self) -> GNodeType:
-        return GNodeType.CLUSTER
+    def type(self) -> Literal[GType.CLUSTER]:
+        return GType.CLUSTER
 
 
 _HIDDEN_NODE_FLAT_WIDTH = 116
@@ -147,15 +159,15 @@ _SOCKET_SPACING_MULTIPLIER = 22
 
 @dataclass(frozen=True)
 class Socket:
-    owner: GNode | Cluster
+    owner: GNode
     idx: int
     is_output: bool
 
     @property
-    def bpy(self) -> NodeSocket:
+    def bpy(self) -> NodeSocket | None:
         v = self.owner
 
-        if not v.is_real:
+        if not is_real(v):
             return None
 
         sockets = v.node.outputs if self.is_output else v.node.inputs
@@ -167,7 +179,7 @@ class Socket:
 
     def _get_hidden_socket_y(self) -> float:
         v = self.owner
-        socket = self.bpy
+        socket = cast(NodeSocket, self.bpy)
         node = socket.node
 
         cap_width = (v.width - _HIDDEN_NODE_FLAT_WIDTH) / 2
@@ -178,12 +190,12 @@ class Socket:
 
         bottom = v.y - v.height
         coords = ((cap_width, v.y), (outer, v.y), (cap_width, bottom), (outer, bottom))
-        points = interpolate_bezier(*map(Vector, coords), len(sockets) + 2)[1:-1]
+        points = interpolate_bezier(*map(Vector, coords), len(sockets) + 2)[1:-1]  # type: ignore
 
         return points[sockets.index(socket)].y
 
     def _get_input_y(self) -> float:
-        input = self.bpy
+        input = cast(NodeSocket, self.bpy)
         node = input.node
 
         if node.hide:
@@ -213,7 +225,7 @@ class Socket:
         return y + idx * _SOCKET_SPACING_MULTIPLIER
 
     def _get_output_y(self) -> float:
-        output = self.bpy
+        output = cast(NodeSocket, self.bpy)
         node = output.node
 
         if node.hide:
@@ -225,11 +237,13 @@ class Socket:
 
     @cached_property
     def _offset_y(self) -> float:
-        if self.owner.is_reroute or not self.owner.is_real:
+        v = self.owner
+
+        if v.is_reroute or not is_real(v):
             return 0
 
         socket_y = self._get_output_y() if self.is_output else self._get_input_y()
-        return socket_y - self.owner.y
+        return socket_y - v.y
 
     @property
     def y(self) -> float:
