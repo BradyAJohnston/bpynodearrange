@@ -13,7 +13,7 @@ from bpy.types import NodeTree
 from mathutils import Vector
 
 from .. import config
-from ..utils import abs_loc, group_by, move_to
+from ..utils import abs_loc, group_by
 from .graph import Cluster, GNode, GNodeType, Socket
 from .ordering import minimize_crossings
 from .placement.bk import bk_assign_y_coords
@@ -501,7 +501,10 @@ def realize_locations(G: nx.DiGraph, old_center: Vector) -> None:
     for v in G:
         # Optimization: avoid using bpy.ops for as many nodes as possible (see `utils.move()`)
         v.node.parent = None
-        move_to(v.node, x=v.x + offset_x, y=v.corrected_y() + offset_y)
+
+        x, y = v.node.location
+        move(v.node, x=v.x + offset_x - x, y=v.corrected_y() + offset_y - y)
+
         v.node.parent = v.cluster.node
 
 

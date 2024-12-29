@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+# type: ignore
+
 from bpy.props import BoolProperty, IntVectorProperty, PointerProperty
 from bpy.types import PropertyGroup, Scene
 from bpy.utils import register_class, unregister_class
@@ -13,15 +15,13 @@ class NA_PG_Settings(PropertyGroup):
       min=0,
       options=set(),
       subtype='XYZ',
-      size=2,
-    )
+      size=2)
 
     balance: BoolProperty(
       name="Balance",
       description="Reduce link lengths by vertically positioning nodes between their neighbours",
       default=True,
-      options=set(),
-    )
+      options=set())
 
 
 def register() -> None:

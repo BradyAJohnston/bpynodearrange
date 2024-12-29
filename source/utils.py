@@ -3,13 +3,20 @@
 from collections import defaultdict
 from collections.abc import Callable, Hashable, Iterable
 from operator import itemgetter
-from typing import TypeVar
+from typing import TypeVar, cast
 
 import bpy
 from bpy.types import Node
 from mathutils import Vector
 
 from . import config
+
+
+def get_ntree() -> bpy.types.NodeTree:
+    assert bpy.context
+    space = cast(bpy.types.SpaceNodeEditor, bpy.context.space_data)
+    return space.edit_tree
+
 
 _T1 = TypeVar('_T1', bound=Hashable)
 _T2 = TypeVar('_T2', bound=Hashable)
@@ -30,8 +37,10 @@ def group_by(
 
 def abs_loc(node: Node) -> Vector:
     loc = node.location.copy()
-    while node := node.parent:
-        loc += node.location
+
+    parent = node
+    while parent := parent.parent:
+        loc += parent.location
 
     return loc
 
@@ -41,6 +50,7 @@ REROUTE_DIM = Vector((8, 8))
 
 def dimensions(node: Node) -> Vector:
     if node.bl_idname != 'NodeReroute':
+        assert bpy.context
         return node.dimensions / bpy.context.preferences.system.ui_scale
     else:
         return REROUTE_DIM
@@ -84,18 +94,9 @@ def move(node: Node, *, x: float = 0, y: float = 0) -> None:
     for n in config.selected:
         n.select = n == node
 
+    assert bpy.context
     ui_scale = bpy.context.preferences.system.ui_scale
     bpy.ops.transform.translate(value=[v * ui_scale for v in (x, y, 0)])
 
     for n in config.selected:
         n.select = True
-
-
-def move_to(node: Node, *, x: float | None = None, y: float | None = None) -> None:
-    loc = abs_loc(node)
-    if x is not None and y is None:
-        move(node, x=x - loc.x)
-    elif y is not None and x is None:
-        move(node, y=y - loc.y)
-    else:
-        move(node, x=x - loc.x, y=y - loc.y)
