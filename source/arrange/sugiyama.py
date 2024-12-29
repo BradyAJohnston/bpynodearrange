@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from itertools import chain, pairwise
 from statistics import fmean
 from typing import cast
@@ -151,7 +151,7 @@ class ClusterGraph:
             assert isinstance(c, Cluster)
             dummy_nodes = []
             for i in range(u.rank + 1, v.rank):
-                w = GNode(f"DUMMY-{dummy_count}", c, GType.DUMMY, i)
+                w = GNode(None, c, GType.DUMMY, i)
                 T.add_edge(c, w)
                 dummy_nodes.append(w)
 
@@ -374,7 +374,7 @@ def route_edges(
     col_right = max([w.x + w.width for w in v.col])
     for u, w, k, d in *G.in_edges(v, data=True, keys=True), *G.out_edges(v, data=True, keys=True):
         socket = d['from_socket'] if v == u else d['to_socket']
-        z = GNode(node='BEND-POINT', type=GType.DUMMY)
+        z = GNode(type=GType.DUMMY)
         z.x = col_right if socket.is_output else v.x
 
         if abs(socket.x() - z.x) <= _MIN_X_DIFF:

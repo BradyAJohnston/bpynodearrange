@@ -8,7 +8,7 @@ from mathutils import Vector
 
 from . import config
 from .arrange.sugiyama import sugiyama_layout
-from .utils import abs_loc, move
+from .utils import abs_loc, get_ntree, move
 
 
 class NA_OT_ArrangeSelected(Operator):
@@ -18,7 +18,7 @@ class NA_OT_ArrangeSelected(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context: Context) -> set[str]:
-        ntree = context.space_data.edit_tree
+        ntree = get_ntree()
         selected = [n for n in ntree.nodes if n.select]
 
         if not selected:
@@ -45,8 +45,7 @@ class NA_OT_ClearLocations(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context: Context) -> set[str]:
-        ntree = context.space_data.edit_tree
-        nodes = ntree.nodes
+        nodes = get_ntree().nodes
         selected = [n for n in nodes if n.select]
 
         if not selected:
@@ -60,15 +59,14 @@ class NA_OT_ClearLocations(Operator):
             return {'CANCELLED'}
 
         if nodes.active in non_frames:
-            origin = abs_loc(nodes.active)
+            origin = -abs_loc(nodes.active)
         else:
-            origin = Vector(map(fmean, zip(*map(abs_loc, non_frames))))
+            origin = -Vector(map(fmean, zip(*map(abs_loc, non_frames))))
 
         config.selected = selected
-        offset_x, offset_y = Vector((0, 0)) - origin
         for node in {n.parent or n for n in selected}:
             if node.bl_idname != 'NodeFrame' or not node.parent:
-                move(node, x=offset_x, y=offset_y)
+                move(node, x=origin.x, y=origin.y)
 
         selected.clear()
         return {'FINISHED'}

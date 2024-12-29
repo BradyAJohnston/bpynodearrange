@@ -3,8 +3,10 @@
 # http://dx.doi.org/10.1007/3-540-45848-4_3
 # https://arxiv.org/abs/2008.01252
 
+from __future__ import annotations
+
 from collections import defaultdict
-from collections.abc import Collection
+from collections.abc import Collection, Hashable
 from itertools import chain, pairwise
 from math import ceil, floor, inf
 from statistics import fmean
@@ -16,15 +18,15 @@ from ...utils import group_by
 from ..graph import GNode
 
 
-def should_ensure_alignment(G: nx.DiGraph, u: GNode) -> bool:
+def should_ensure_alignment(G: nx.DiGraph[GNode], u: GNode) -> bool:
     if u.is_reroute:
         return any(z.is_reroute for z in G.pred[u])
 
     # Not in original paper
-    return G.in_degree(u) == 1 and G.out_degree(u) < 2
+    return G.in_degree[u] == 1 and G.out_degree[u] < 2
 
 
-def marked_conflicts(G: nx.DiGraph) -> set[frozenset[GNode, GNode]]:
+def marked_conflicts(G: nx.DiGraph[GNode]) -> set[frozenset[GNode]]:
     marked_edges = set()
     for col1, col2 in pairwise(reversed(G.graph['columns'][1:-1])):
         k_0 = 0
@@ -53,8 +55,8 @@ def marked_conflicts(G: nx.DiGraph) -> set[frozenset[GNode, GNode]]:
 
 
 def horizontal_alignment(
-  G: nx.DiGraph,
-  marked_edges: Collection[frozenset[GNode, GNode]],
+  G: nx.DiGraph[GNode],
+  marked_edges: Collection[frozenset[GNode]],
 ) -> None:
     for col in G.graph['columns']:
         prev_i = -1
@@ -73,7 +75,7 @@ def horizontal_alignment(
                 prev_i = i
 
 
-def precompute_cells(G: nx.DiGraph) -> None:
+def precompute_cells(G: nx.DiGraph[Hashable]) -> None:
     columns = G.graph['columns']
     blocks = group_by(chain(*columns), key=lambda v: v.root)
     for block, root in blocks.items():
@@ -85,12 +87,13 @@ def min_separation(u: GNode, v: GNode, is_up: bool) -> float:
     if is_up:
         u, v = v, u
 
+    assert u.root.cells
     indicies = u.root.cells[0]
     heights = [h for i, h in zip(*v.root.cells) if indicies[0] <= i <= indicies[-1]]
     return max(heights, default=0) + config.MARGIN.y
 
 
-def place_block(G: nx.DiGraph, v: GNode, is_up: bool) -> None:
+def place_block(v: GNode, is_up: bool) -> None:
     if v.y is not None:
         return
 
@@ -99,7 +102,7 @@ def place_block(G: nx.DiGraph, v: GNode, is_up: bool) -> None:
     while True:
         if (i := w.col.index(w)) > 0:
             u = w.col[i - 1].root
-            place_block(G, u, is_up)
+            place_block(u, is_up)
 
             if v.sink == v:
                 v.sink = u.sink
@@ -117,10 +120,10 @@ def place_block(G: nx.DiGraph, v: GNode, is_up: bool) -> None:
         w.sink = v.sink
 
 
-def vertical_compaction(G: nx.DiGraph, is_up: bool) -> None:
+def vertical_compaction(G: nx.DiGraph[GNode], is_up: bool) -> None:
     for v in G:
         if v.root == v:
-            place_block(G, v, is_up)
+            place_block(v, is_up)
 
     columns = G.graph['columns']
     neighborings = defaultdict(set)
@@ -159,7 +162,7 @@ def balance(layouts: list[list[float]]) -> None:
             layout[j] += movement
 
 
-def bk_assign_y_coords(G: nx.DiGraph) -> None:
+def bk_assign_y_coords(G: nx.DiGraph[GNode]) -> None:
     columns = G.graph['columns']
     for col in columns:
         col.reverse()

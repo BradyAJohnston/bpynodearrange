@@ -5,28 +5,27 @@
 from __future__ import annotations
 
 from functools import cache
-from math import inf, sqrt
+from math import sqrt
 from typing import TYPE_CHECKING
 
 import networkx as nx
 
 from ..utils import group_by
-from .graph import GNode, GNodeType
+from .graph import GNode, GType
 
 if TYPE_CHECKING:
     from .sugiyama import ClusterGraph
 
 
 # https://api.semanticscholar.org/CorpusID:14932050
-def get_nesting_graph(CG: ClusterGraph) -> nx.DiGraph:
-    S = CG.S
-    G = CG.G
-    H = G.copy()
+def get_nesting_graph(CG: ClusterGraph) -> nx.MultiDiGraph[GNode]:
+    H = CG.G.copy()
     for u, v in CG.T.edges:
-        if u in S and v in G:
-            H.add_edges_from(((u.left, v), (v, u.right)))
-        elif {u, v} <= S:
-            H.add_edges_from(((u.left, v.left), (v.right, u.right)))
+        if u.type == GType.CLUSTER:
+            if v.type != GType.CLUSTER:
+                H.add_edges_from(((u.left, v), (v, u.right)))
+            else:
+                H.add_edges_from(((u.left, v.left), (v.right, u.right)))
 
     return H
 
@@ -35,12 +34,12 @@ _Edge = tuple[GNode, GNode, int]
 
 
 @cache
-def get_adj_edges_H(H: nx.MultiDiGraph, v: GNode) -> tuple[_Edge, ...]:
+def get_adj_edges_H(H: nx.MultiDiGraph[GNode], v: GNode) -> tuple[_Edge, ...]:
     return (*H.in_edges(v, keys=True), *H.out_edges(v, keys=True))
 
 
 @cache
-def get_adj_edges_T(T: nx.MultiDiGraph, v: GNode) -> tuple[_Edge, ...]:
+def get_adj_edges_T(T: nx.MultiDiGraph[GNode], v: GNode) -> tuple[_Edge, ...]:
     return (*T.in_edges(v, keys=True), *T.out_edges(v, keys=True))
 
 
@@ -51,8 +50,8 @@ def get_slack(e: _Edge) -> int:
 
 
 def tight_tree(
-  H: nx.MultiDiGraph,
-  T: nx.MultiDiGraph,
+  H: nx.MultiDiGraph[GNode],
+  T: nx.MultiDiGraph[GNode],
   v: GNode,
   visited: set[_Edge] | None = None,
 ) -> int:
@@ -78,30 +77,30 @@ def tight_tree(
     return len(T)
 
 
-def set_post_order_numbers(v: GNode, T: nx.MultiDiGraph) -> None:
+def set_post_order_numbers(v: GNode, T: nx.MultiDiGraph[GNode]) -> None:
     visited = set()
     num = 0
 
     def recurse(w: GNode) -> int:
-        lowest = inf
+        nums = []
         for e in get_adj_edges_T(T, w):
             if e in visited:
                 continue
 
             visited.add(e)
             other = e[0] if w != e[0] else e[1]
-            lowest = min(lowest, recurse(other))
+            nums.append(recurse(other))
 
         nonlocal num
         w.po_num = num
-        w.lowest_po_num = min(lowest, num)
+        w.lowest_po_num = min(nums + [num])
         num += 1
         return w.lowest_po_num
 
     recurse(v)
 
 
-def compute_cut_values(H: nx.MultiDiGraph, T: nx.MultiDiGraph) -> None:
+def compute_cut_values(H: nx.MultiDiGraph[GNode], T: nx.MultiDiGraph[GNode]) -> None:
     unknown_cut_values = {}
     leaves = []
     for v in H:
@@ -136,7 +135,7 @@ def compute_cut_values(H: nx.MultiDiGraph, T: nx.MultiDiGraph) -> None:
             v = w if u == v else u
 
 
-def feasible_tree(H: nx.MultiDiGraph) -> nx.MultiDiGraph:
+def feasible_tree(H: nx.MultiDiGraph[GNode]) -> nx.MultiDiGraph[GNode]:
     generations = nx.topological_generations(nx.reverse_view(H))
     for i, col in enumerate(reversed(tuple(generations))):
         for v in col:
@@ -158,7 +157,7 @@ def feasible_tree(H: nx.MultiDiGraph) -> nx.MultiDiGraph:
     return T
 
 
-def leave_edge(T: nx.MultiDiGraph) -> _Edge | None:
+def leave_edge(T: nx.MultiDiGraph[GNode]) -> _Edge | None:
     return next(((u, v, k) for u, v, k, c in T.edges.data('cut_value', keys=True) if c < 0), None)
 
 
@@ -171,12 +170,17 @@ def is_in_head(v: GNode, e: _Edge) -> bool:
     return u.po_num < w.po_num
 
 
-def enter_edge(H: nx.MultiDiGraph, e: _Edge) -> _Edge:
+def enter_edge(H: nx.MultiDiGraph[GNode], e: _Edge) -> _Edge:
     edges = [f for f in H.edges(keys=True) if is_in_head(f[0], e) and not is_in_head(f[1], e)]
     return min(edges, key=get_slack)
 
 
-def exchange(H: nx.MultiDiGraph, T: nx.MultiDiGraph, leave: _Edge, enter: _Edge) -> None:
+def exchange(
+  H: nx.MultiDiGraph[GNode],
+  T: nx.MultiDiGraph[GNode],
+  leave: _Edge,
+  enter: _Edge,
+) -> None:
     T.remove_edge(*leave)
     T.add_edge(*enter)
 
@@ -194,12 +198,10 @@ def exchange(H: nx.MultiDiGraph, T: nx.MultiDiGraph, leave: _Edge, enter: _Edge)
     compute_cut_values(H, T)
 
 
-def normalize_and_balance(H: nx.DiGraph, G: nx.DiGraph) -> None:
-    v: GNode
-
-    cc: set[GNode]
+def normalize_and_balance(H: nx.DiGraph[GNode], G: nx.DiGraph[GNode]) -> None:
     for cc in nx.weakly_connected_components(G):
         c = next(iter(cc)).cluster
+        assert c
 
         if any(v.cluster != c for v in cc):
             continue
@@ -243,8 +245,6 @@ def compute_ranks(CG: ClusterGraph) -> None:
     for i, layer in enumerate(nx.topological_generations(CG.T)):
         for c in CG.S.intersection(layer):
             c.nesting_level = i
-            c.left = GNode(None, c, GNodeType.HORIZONTAL_BORDER)
-            c.right = GNode(None, c, GNodeType.HORIZONTAL_BORDER)
 
     H = get_nesting_graph(CG)
     nx.set_edge_attributes(H, 1, 'weight')

@@ -16,11 +16,9 @@ from typing import TYPE_CHECKING
 import networkx as nx
 
 from ... import config
-from ..graph import GNode, GNodeType, Socket
+from ..graph import GNode, GType, Socket
 
 if TYPE_CHECKING:
-    from ctypes import _Pointer
-
     from ..sugiyama import ClusterGraph
 
 
@@ -54,7 +52,7 @@ class Segment:
         return segment
 
 
-class Mode(Enum):
+class _Mode(Enum):
     FORW_PENDULUM = auto()
     BACKW_PENDULUM = auto()
     RUBBER = auto()
@@ -66,7 +64,7 @@ def get_linear_segments(CG: ClusterGraph) -> list[Segment]:
 
     complex_clusters = set()
     for c in CG.S:
-        if any(G.in_degree(v) > 1 or G.out_degree(v) > 1 for v in T[c] if v in G):
+        if any(G.in_degree[v] > 1 or G.out_degree[v] > 1 for v in T[c] if v.type != GType.CLUSTER):
             complex_clusters.add(c)
 
     linear_segments = []
@@ -122,7 +120,7 @@ def prevent_cycles(
             if not cycle_segments:
                 continue
 
-            if v.type == GNodeType.VERTICAL_BORDER:
+            if v.type == GType.VERTICAL_BORDER:
                 for s in cycle_segments:
                     linear_segments.append(s.split(col1[segments1.index(s)]))
             else:
@@ -145,7 +143,7 @@ def sort_linear_segments(
         SG.add_edges_from([(v.segment, w.segment) for v, w in pairwise(col)])
 
     indicies = {v: i for i, v in enumerate(nx.topological_sort(SG))}
-    linear_segments.sort(key=indicies.get)
+    linear_segments.sort(key=lambda v: indicies[v])
 
 
 def create_unbalanced_placement(linear_segments: Sequence[Segment]) -> None:
@@ -165,7 +163,7 @@ _THRESH_FAC = 20
 
 
 @cache
-def get_out_edges(G: nx.DiGraph, v: GNode) -> list[tuple[Socket, Socket]]:
+def get_out_edges(G: nx.DiGraph[GNode], v: GNode) -> list[tuple[Socket, Socket]]:
     return [#
       (d['from_socket'], d['to_socket'])
       for _, w, d in G.out_edges.data(nbunch=v)
@@ -173,26 +171,26 @@ def get_out_edges(G: nx.DiGraph, v: GNode) -> list[tuple[Socket, Socket]]:
 
 
 @cache
-def get_in_edges(G: nx.DiGraph, v: GNode) -> list[tuple[Socket, Socket]]:
+def get_in_edges(G: nx.DiGraph[GNode], v: GNode) -> list[tuple[Socket, Socket]]:
     return [#
       (d['from_socket'], d['to_socket'])
       for u, _, d in G.in_edges.data(nbunch=v)
       if u.segment != v.segment]
 
 
-def calc_deflection(G: nx.DiGraph, segment: Segment, mode: Mode) -> None:
+def calc_deflection(G: nx.DiGraph[GNode], segment: Segment, mode: _Mode) -> None:
     segment_deflection = 0
     node_weight_sum = 0
     for v in segment:
         node_deflection = 0
         edge_weight_sum = 0
 
-        if mode != Mode.FORW_PENDULUM:
+        if mode != _Mode.FORW_PENDULUM:
             for from_socket, to_socket in get_out_edges(G, v):
                 node_deflection += to_socket.owner.y + to_socket.y - (v.y + from_socket.y)
                 edge_weight_sum += 1
 
-        if mode != Mode.BACKW_PENDULUM:
+        if mode != _Mode.BACKW_PENDULUM:
             for from_socket, to_socket in get_in_edges(G, v):
                 node_deflection += from_socket.owner.y + from_socket.y - (v.y + to_socket.y)
                 edge_weight_sum += 1
@@ -220,6 +218,7 @@ def merge_regions(columns: Sequence[Sequence[GNode]]) -> None:
                 if weight_sum == 0 or region1 == region2:
                     continue
 
+                assert v.cluster
                 if not v.cluster.node or v.cluster != w.cluster:
                     if v.y + region1.deflection - v.height - config.MARGIN.y >= w.y + region2.deflection:
                         continue
@@ -236,12 +235,12 @@ def merge_regions(columns: Sequence[Sequence[GNode]]) -> None:
             break
 
 
-def balance_placement(G: nx.DiGraph, linear_segments: Sequence[Segment]) -> None:
+def balance_placement(G: nx.DiGraph[GNode], linear_segments: Sequence[Segment]) -> None:
     pendulum_iters = _PENDULUM_ITERS
     final_iters = _FINAL_ITERS
 
     ready = False
-    mode = Mode.FORW_PENDULUM
+    mode = _Mode.FORW_PENDULUM
     prev_total_deflection = inf
     while True:
         total_deflection = 0
@@ -257,14 +256,14 @@ def balance_placement(G: nx.DiGraph, linear_segments: Sequence[Segment]) -> None
             for v in segment:
                 v.y += deflection
 
-        if mode in {Mode.FORW_PENDULUM, Mode.BACKW_PENDULUM}:
+        if mode in {_Mode.FORW_PENDULUM, _Mode.BACKW_PENDULUM}:
             pendulum_iters -= 1
             if pendulum_iters <= 0 and (total_deflection < prev_total_deflection
               or -pendulum_iters > _ITERS):
-                mode = Mode.RUBBER
+                mode = _Mode.RUBBER
                 prev_total_deflection = inf
             else:
-                mode = Mode.BACKW_PENDULUM if mode == Mode.FORW_PENDULUM else Mode.FORW_PENDULUM
+                mode = _Mode.BACKW_PENDULUM if mode == _Mode.FORW_PENDULUM else _Mode.FORW_PENDULUM
                 prev_total_deflection = total_deflection
         else:
             ready = total_deflection >= prev_total_deflection or prev_total_deflection - total_deflection < _THRESH_FAC / _ITERS

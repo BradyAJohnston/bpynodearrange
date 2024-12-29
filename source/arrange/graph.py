@@ -44,7 +44,7 @@ def is_real(v: GNode | Cluster) -> TypeGuard[_RealGNode]:
 
 
 class GNode:
-    node: Node | str | None
+    node: Node | None
     cluster: Cluster | None
     type: _NonCluster
 
@@ -74,7 +74,7 @@ class GNode:
 
     def __init__(
       self,
-      node: Node | str | None = None,
+      node: Node | None = None,
       cluster: Cluster | None = None,
       type: _NonCluster = GType.NODE,
       rank: int | None = None,
