@@ -165,6 +165,12 @@ def calc_barycenters(H: _ClusterCrossingsData) -> None:
         w.cr.barycenter = weight / len(sockets)
 
 
+def get_barycenter(v: GNode | Cluster) -> float:
+    barycenter = v.cr.barycenter
+    assert barycenter is not None
+    return barycenter
+
+
 def fill_in_unknown_barycenters(col: list[GNode | Cluster], is_first_iter: bool) -> None:
     if is_first_iter:
         max_b = max([b for v in col if (b := v.cr.barycenter) is not None], default=0) + 2
@@ -177,7 +183,7 @@ def fill_in_unknown_barycenters(col: list[GNode | Cluster], is_first_iter: bool)
         if v.cr.barycenter is not None:
             continue
 
-        prev_b = col[i - 1].cr.barycenter if i != 0 else 0
+        prev_b = get_barycenter(col[i - 1]) if i != 0 else 0
         next_b = next((b for w in col[i + 1:] if (b := w.cr.barycenter) is not None), prev_b + 1)
         v.cr.barycenter = (prev_b + next_b) / 2
 
@@ -215,6 +221,7 @@ def handle_constraints(H: _ClusterCrossingsData) -> None:
         s, t = c
 
         deg[v_c] = deg[s] + deg[t]
+        assert s.cr.barycenter and t.cr.barycenter
         if deg[v_c] > 0:
             v_c.cr.barycenter = (s.cr.barycenter * deg[s] + t.cr.barycenter * deg[t]) / deg[v_c]
         else:
@@ -229,7 +236,7 @@ def handle_constraints(H: _ClusterCrossingsData) -> None:
         if v_c not in GC:
             unconstrained.add(v_c)
 
-    groups = sorted(unconstrained | GC.nodes, key=lambda v: v.cr.barycenter)
+    groups = sorted(unconstrained | GC.nodes, key=get_barycenter)
     for i, v in enumerate(chain(*[L[v] for v in groups])):
         v.cr.barycenter = i
 
@@ -282,7 +289,7 @@ def get_cross_count(H: _ClusterCrossingsData) -> int:
 
 def get_new_col_order(v: GNode | Cluster, LT: _Tree) -> Iterator[GNode]:
     if v.type == GType.CLUSTER:
-        for w in sorted(LT[v], key=lambda w: w.cr.barycenter):
+        for w in sorted(LT[v], key=get_barycenter):
             yield from get_new_col_order(w, LT)
     else:
         yield v
@@ -335,7 +342,7 @@ def minimized_cross_count(
                 fixed_col = columns[0] if forwards else columns[-1]
                 key = [v.cluster for v in fixed_col].index
             else:
-                key = lambda c: c.cr.barycenter
+                key = get_barycenter
 
             for H in data:
                 H.constrained_clusters.sort(key=key)

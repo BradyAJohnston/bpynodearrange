@@ -62,7 +62,7 @@ class GNode:
     x: float
     y: float
 
-    segment: Segment | GNode
+    segment: Segment
 
     root: GNode
     aligned: GNode
@@ -106,7 +106,7 @@ class GNode:
         self.x = None  # type: ignore
         self.reset()
 
-        self.segment = self
+        self.segment = None  # type: ignore
 
     def __hash__(self) -> int:
         return id(self)
@@ -214,7 +214,7 @@ class Socket:
             for i in inputs[:idx + 1]:
                 is_multi_value = i.type in {'VECTOR', 'ROTATION', 'MATRIX'}
                 if is_multi_value and not i.hide_value and not i.is_linked:
-                    y += (_SOCKET_SPACING_MULTIPLIER * 0.909) * len(i.default_value)
+                    y += _SOCKET_SPACING_MULTIPLIER * 0.909 * len(i.default_value)  # type: ignore
         else:
             y -= 56.5
             idx = -inputs.index(input)
