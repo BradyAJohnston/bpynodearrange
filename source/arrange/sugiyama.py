@@ -398,14 +398,14 @@ def assign_x_coords_and_route_edges(
 ) -> None:
     bend_points = defaultdict(list)
 
-    columns = G.graph['columns']
+    columns: list[list[GNode]] = G.graph['columns']
     x = 0
     edge_space_fac = min(1, _EDGE_SPACING / config.MARGIN.x)
     for i, col in enumerate(columns):
         max_width = max([v.width for v in col])
 
         for v in col:
-            v.x = x - (v.width - max_width) / 2
+            v.x = x if v.is_reroute else x - (v.width - max_width) / 2
 
         y_diffs = []
         for v in col:
