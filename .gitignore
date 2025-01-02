@@ -1,1 +1,10 @@
+# macOS generated files
 .DS_Store
+
+# VS Code
+.vscode/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
