@@ -73,8 +73,9 @@ def crossing_reduction_data(
         for h in topologically_sorted_clusters(LT):
             G_h = nx.DiGraph()
             H = _ClusterCrossingsData(G_h, list(LT[h]))
+
             G_h.add_nodes_from(LT[h])
-            for s, t, d in G.in_edges(TC[h], data=True):
+            for s, t, d in G.in_edges(TC[h], data=True):  # type: ignore
                 c = next(c for c in TC.pred[t] if c in LT[h])
 
                 if (s, c) in G_h.edges:
@@ -252,7 +253,7 @@ def get_cross_count(H: _ClusterCrossingsData) -> int:
 
     def pos(w: Socket) -> float:
         v = temp_owners[w]
-        return v.cr.barycenter if v in free_col else v.col.index(v)
+        return v.cr.barycenter if v in free_col else v.col.index(v)  # type: ignore
 
     H.N.sort(key=pos)
     H.S.sort(key=pos)
@@ -375,7 +376,7 @@ def minimize_crossings(G: nx.DiGraph[GNode], T: _Tree) -> None:
     forward_items = list(zip(columns[1:], trees[1:], forward_data))
 
     trees.reverse()
-    backward_data = crossing_reduction_data(nx.reverse_view(G), trees, True)
+    backward_data = crossing_reduction_data(nx.reverse_view(G), trees, True)  # type: ignore
     backward_items = list(zip(columns[-2::-1], trees[1:], backward_data))
 
     # -------------------------------------------------------------------

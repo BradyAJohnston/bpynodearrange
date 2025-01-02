@@ -170,11 +170,11 @@ def bk_assign_y_coords(G: nx.DiGraph[GNode]) -> None:
     marked_edges = marked_conflicts(G)
     layouts = []
     for dir_x in (-1, 1):
-        G = nx.reverse_view(G)
+        G = nx.reverse_view(G)  # type: ignore
         columns.reverse()
         for dir_y in (-1, 1):
             horizontal_alignment(G, marked_edges)
-            precompute_cells(G)
+            precompute_cells(G)  # type: ignore
             vertical_compaction(G, dir_y == 1)
             layouts.append([v.y * -dir_y for v in G])
 
