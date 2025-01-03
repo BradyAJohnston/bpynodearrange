@@ -19,24 +19,36 @@ class NA_PT_ArrangeSelected(NodePanel, Panel):
         layout = self.layout
         layout.use_property_split = True
 
-        scene = context.scene
-        settings = scene.na_settings
+        settings = context.scene.na_settings
 
         layout.operator("node.na_arrange_selected")
         layout.prop(settings, "margin")
         layout.prop(settings, 'balance')
 
+        header, panel = layout.panel("batch_arrange", default_closed=True)
+        header.label(text="Batch Arrange")
+        if panel:
+            panel.operator("node.na_batch_arrange")
+
 
 class NA_PT_ClearLocations(NodePanel, Panel):
-    bl_label = "Clear"
+    bl_label = "Recenter"
 
     def draw(self, context: Context) -> None:
         layout = self.layout
 
-        layout.operator("node.na_clear_locations")
+        layout.operator("node.na_recenter_selected")
+
+        header, panel = layout.panel("batch_recenter", default_closed=True)
+        header.label(text="Batch Recenter")
+        if panel:
+            panel.operator("node.na_batch_recenter")
 
 
-classes = (NA_PT_ArrangeSelected, NA_PT_ClearLocations)
+classes = (
+  NA_PT_ArrangeSelected,
+  NA_PT_ClearLocations,
+)
 
 
 def register() -> None:
