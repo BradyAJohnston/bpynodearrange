@@ -92,10 +92,13 @@ def batch_modify(bl_data: Iterable[bpy.types.ID], cls: Type[Operator], *, redraw
     return count
 
 
+_BATCH_DESC = "all node trees in the current .blend file with the above settings"
+
+
 class NA_OT_BatchArrange(Operator):
     bl_idname = "node.na_batch_arrange"
     bl_label = "Arrange Node Trees"
-    bl_description = "todo"
+    bl_description = f"Arrange {_BATCH_DESC}"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -146,7 +149,7 @@ class NA_OT_RecenterSelected(Operator):
 class NA_OT_BatchRecenter(Operator):
     bl_idname = "node.na_batch_recenter"
     bl_label = "Recenter Node Trees"
-    bl_description = "todo"
+    bl_description = f"Recenter {_BATCH_DESC}"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context: Context) -> set[str]:

@@ -23,12 +23,20 @@ class NA_PG_Settings(PropertyGroup):
       default=True,
       options=set())
 
+    # yapf: disable
     origin: EnumProperty(
-      items=(('CENTER', "Center", "todo"), ('ACTIVE_NODE', "Active Node", "todo")),
+      items=(
+        ('CENTER',
+         "Center",
+         "Move selected nodes by the difference of their average location from (0, 0)"),
+        ('ACTIVE_NODE',
+         "Active Node",
+         "Move selected nodes by the difference of the active node's location from (0, 0)")),
       name="Origin",
       description="todo",
       default='CENTER',
       options=set())
+    # yapf: enable
 
 
 def register() -> None:
