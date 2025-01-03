@@ -5,11 +5,17 @@
 from bpy.types import Context, Panel
 from bpy.utils import register_class, unregister_class
 
+from .utils import get_ntree
+
 
 class NodePanel:
     bl_space_type = 'NODE_EDITOR'
     bl_region_type = 'UI'
     bl_category = "Arrange"
+
+    @classmethod
+    def poll(cls, context: Context) -> bool:
+        return get_ntree() is not None
 
 
 class NA_PT_ArrangeSelected(NodePanel, Panel):

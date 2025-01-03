@@ -14,7 +14,18 @@ from .arrange.sugiyama import sugiyama_layout
 from .utils import abs_loc, get_ntree, move
 
 
-class NA_OT_ArrangeSelected(Operator):
+class NodeOperator:
+
+    @classmethod
+    def poll(cls: Type[Operator], context: Context) -> bool:  # type: ignore
+        if get_ntree().library:
+            cls.poll_message_set("Current node tree is linked from another .blend file.")
+            return False
+
+        return True
+
+
+class NA_OT_ArrangeSelected(NodeOperator, Operator):
     bl_idname = "node.na_arrange_selected"
     bl_label = "Arrange Selected"
     bl_description = "Arrange selected nodes"
@@ -59,8 +70,6 @@ def batch_modify(bl_data: Iterable[bpy.types.ID], cls: Type[Operator], *, redraw
 
     space = cast(bpy.types.SpaceNodeEditor, bpy.context.space_data)
     path = space.path
-    had_empty_path = not path
-
     op = attrgetter(cls.bl_idname)(bpy.ops)
     count = 0
     for id_data in bl_data:
@@ -69,6 +78,10 @@ def batch_modify(bl_data: Iterable[bpy.types.ID], cls: Type[Operator], *, redraw
 
         ntree = cast(bpy.types.NodeTree, getattr(id_data, 'node_tree', id_data))
         path.append(ntree)
+
+        if not cls.poll(bpy.context):
+            path.pop()
+            continue
 
         nodes = ntree.nodes
         old_selection = {n for n in nodes if n.select}
@@ -86,16 +99,13 @@ def batch_modify(bl_data: Iterable[bpy.types.ID], cls: Type[Operator], *, redraw
 
         path.pop()
 
-    if had_empty_path:
-        path.clear()
-
     return count
 
 
 _BATCH_DESC = "all node trees in the current .blend file with the above settings"
 
 
-class NA_OT_BatchArrange(Operator):
+class NA_OT_BatchArrange(NodeOperator, Operator):
     bl_idname = "node.na_batch_arrange"
     bl_label = "Arrange Node Trees"
     bl_description = f"Arrange {_BATCH_DESC}"
@@ -108,7 +118,7 @@ class NA_OT_BatchArrange(Operator):
         return {'FINISHED'}
 
 
-class NA_OT_RecenterSelected(Operator):
+class NA_OT_RecenterSelected(NodeOperator, Operator):
     bl_idname = "node.na_recenter_selected"
     bl_label = "Recenter Selected"
     bl_description = "Clear the locations of selected nodes"
@@ -146,7 +156,7 @@ class NA_OT_RecenterSelected(Operator):
         return {'FINISHED'}
 
 
-class NA_OT_BatchRecenter(Operator):
+class NA_OT_BatchRecenter(NodeOperator, Operator):
     bl_idname = "node.na_batch_recenter"
     bl_label = "Recenter Node Trees"
     bl_description = f"Recenter {_BATCH_DESC}"
