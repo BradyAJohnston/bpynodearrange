@@ -36,8 +36,12 @@ class NA_PT_ClearLocations(NodePanel, Panel):
 
     def draw(self, context: Context) -> None:
         layout = self.layout
+        layout.use_property_split = True
+
+        settings = context.scene.na_settings
 
         layout.operator("node.na_recenter_selected")
+        layout.prop(settings, "origin")
 
         header, panel = layout.panel("batch_recenter", default_closed=True)
         header.label(text="Batch Recenter")

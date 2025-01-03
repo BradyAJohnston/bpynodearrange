@@ -125,8 +125,12 @@ class NA_OT_RecenterSelected(Operator):
             self.report({'WARNING'}, "No valid nodes selected")
             return {'CANCELLED'}
 
-        if nodes.active in non_frames:
-            origin = -abs_loc(nodes.active)
+        if context.scene.na_settings.origin == 'ACTIVE_NODE':  # type: ignore
+            if nodes.active in non_frames:
+                origin = -abs_loc(nodes.active)
+            else:
+                self.report({'WARNING'}, "No valid active node")
+                return {'CANCELLED'}
         else:
             origin = -Vector(map(fmean, zip(*map(abs_loc, non_frames))))
 

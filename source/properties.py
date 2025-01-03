@@ -2,7 +2,7 @@
 
 # type: ignore
 
-from bpy.props import BoolProperty, IntVectorProperty, PointerProperty
+from bpy.props import BoolProperty, EnumProperty, IntVectorProperty, PointerProperty
 from bpy.types import PropertyGroup, Scene
 from bpy.utils import register_class, unregister_class
 
@@ -21,6 +21,13 @@ class NA_PG_Settings(PropertyGroup):
       name="Balance",
       description="Reduce link lengths by vertically positioning nodes between their neighbours",
       default=True,
+      options=set())
+
+    origin: EnumProperty(
+      items=(('CENTER', "Center", "todo"), ('ACTIVE_NODE', "Active Node", "todo")),
+      name="Origin",
+      description="todo",
+      default='CENTER',
       options=set())
 
 
