@@ -18,8 +18,14 @@ class NodeOperator:
 
     @classmethod
     def poll(cls: Type[Operator], context: Context) -> bool:  # type: ignore
-        if get_ntree().library:
+        ntree = get_ntree()
+
+        if ntree.library:
             cls.poll_message_set("Current node tree is linked from another .blend file.")
+            return False
+
+        if ntree.bl_idname == 'NodeTreeUndefined':
+            cls.poll_message_set("Current node tree is undefined.")
             return False
 
         return True
