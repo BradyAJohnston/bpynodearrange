@@ -108,7 +108,7 @@ def batch_modify(bl_data: Iterable[bpy.types.ID], cls: Type[Operator], *, redraw
     return count
 
 
-_BATCH_DESC = "all node trees in the current .blend file with the above settings"
+_BATCH_DESC = "all node trees in the current .blend file with the above settings.\nWarning: May be slow if there are geometry node trees, due to re-evaluation"
 
 
 class NA_OT_BatchArrange(NodeOperator, Operator):
