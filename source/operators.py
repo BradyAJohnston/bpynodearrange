@@ -15,6 +15,7 @@ from .utils import abs_loc, get_ntree, move
 
 
 class NodeOperator:
+    bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls: Type[Operator], context: Context) -> bool:  # type: ignore
@@ -35,7 +36,6 @@ class NA_OT_ArrangeSelected(NodeOperator, Operator):
     bl_idname = "node.na_arrange_selected"
     bl_label = "Arrange Selected"
     bl_description = "Arrange selected nodes"
-    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context: Context) -> set[str]:
         ntree = get_ntree()
@@ -115,7 +115,6 @@ class NA_OT_BatchArrange(NodeOperator, Operator):
     bl_idname = "node.na_batch_arrange"
     bl_label = "Arrange Node Trees"
     bl_description = f"Arrange {_BATCH_DESC}"
-    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         bl_data = get_all_ntrees()
@@ -128,7 +127,6 @@ class NA_OT_RecenterSelected(NodeOperator, Operator):
     bl_idname = "node.na_recenter_selected"
     bl_label = "Recenter Selected"
     bl_description = "Clear the locations of selected nodes"
-    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context: Context) -> set[str]:
         nodes = get_ntree().nodes
@@ -166,7 +164,6 @@ class NA_OT_BatchRecenter(NodeOperator, Operator):
     bl_idname = "node.na_batch_recenter"
     bl_label = "Recenter Node Trees"
     bl_description = f"Recenter {_BATCH_DESC}"
-    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context: Context) -> set[str]:
         bl_data = get_all_ntrees()
