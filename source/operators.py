@@ -114,7 +114,7 @@ class NA_OT_BatchArrange(NodeOperator, Operator):
     bl_label = "Arrange Node Trees"
     bl_description = f"Arrange {_BATCH_DESC}"
 
-    def execute(self, context):
+    def execute(self, context: Context):
         bl_data = get_all_ntrees()
         count = batch_modify(bl_data, NA_OT_ArrangeSelected, redraw_ui=True)
         self.report({'INFO'}, f"Arranged {count} node tree(s)")

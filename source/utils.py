@@ -3,7 +3,7 @@
 from collections import defaultdict
 from collections.abc import Callable, Hashable, Iterable
 from operator import itemgetter
-from typing import TypeVar, cast
+from typing import TypeVar
 
 import bpy
 from bpy.types import Node
@@ -13,9 +13,7 @@ from . import config
 
 
 def get_ntree() -> bpy.types.NodeTree:
-    assert bpy.context
-    space = cast(bpy.types.SpaceNodeEditor, bpy.context.space_data)
-    return space.edit_tree
+    return bpy.context.space_data.edit_tree  # type: ignore
 
 
 _T1 = TypeVar('_T1', bound=Hashable)
