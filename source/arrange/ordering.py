@@ -22,7 +22,6 @@ from .graph import Cluster, GNode, GType, Socket
 
 # -------------------------------------------------------------------
 
-
 _MixedGraph: TypeAlias = 'nx.DiGraph[GNode | Cluster]'
 
 
@@ -54,7 +53,6 @@ def topologically_sorted_clusters(LT: _MixedGraph) -> list[Cluster]:
 class _ClusterCrossingsData:
     graph: _MixedGraph
     reduced_free_col: list[GNode | Cluster]
-    temp_owners: dict[Socket, GNode | Cluster] = field(default_factory=dict)
 
     fixed_sockets: dict[GNode, list[Socket]] = field(default_factory=dict)
     free_sockets: dict[GNode | Cluster, list[Socket]] = field(default_factory=dict)
@@ -90,16 +88,8 @@ def crossing_reduction_data(
                 if d[k1].owner != s:
                     k1, k2 = k2, k1
 
-                # `replace(..., owner=...)` would require an `assert owner.type != GType.CLUSTER`
-                #  virtually every time `Socket` is used (for Pyright).
-
-                from_socket = replace(d[k1])
-                H.temp_owners[from_socket] = s
-
-                to_socket = replace(d[k2])
-                H.temp_owners[to_socket] = c
-
-                G_h.add_edge(s, c, weight=1, from_socket=from_socket, to_socket=to_socket)
+                attr = dict(from_socket=replace(d[k1], owner=s), to_socket=replace(d[k2], owner=c))
+                G_h.add_edge(s, c, weight=1, **attr)
 
             # -------------------------------------------------------------------
 
@@ -164,7 +154,7 @@ def calc_barycenters(H: _ClusterCrossingsData) -> None:
         if not sockets:
             continue
 
-        weight = sum([H.temp_owners[s].cr.socket_ranks[s] for s in sockets])
+        weight = sum([s.owner.cr.socket_ranks[s] for s in sockets])
         weight += uniform(0, 1) * _RANDOM_AMOUNT - _RANDOM_AMOUNT / 2
         w.cr.barycenter = weight / len(sockets)
 
@@ -252,10 +242,9 @@ def get_cross_count(H: _ClusterCrossingsData) -> int:
         return 0
 
     reduced_free_col = set(H.reduced_free_col)
-    temp_owners = H.temp_owners
 
     def pos(w: Socket) -> float:
-        v = temp_owners[w]
+        v = w.owner
         return v.cr.barycenter if v in reduced_free_col else v.col.index(v)  # type: ignore
 
     H.N.sort(key=pos)
