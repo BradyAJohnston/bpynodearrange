@@ -185,5 +185,4 @@ def register() -> None:
 
 def unregister() -> None:
     for cls in reversed(classes):
-        if cls.is_registered:
-            bpy.utils.unregister_class(cls)
+        bpy.utils.unregister_class(cls)
