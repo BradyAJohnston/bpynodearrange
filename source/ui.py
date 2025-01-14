@@ -15,7 +15,7 @@ class NodePanel:
 
     @classmethod
     def poll(cls, context: Context) -> bool:
-        return get_ntree() is not None
+        return context.space_data.type == 'NODE_EDITOR' and get_ntree() is not None
 
 
 class NA_PT_ArrangeSelected(NodePanel, Panel):

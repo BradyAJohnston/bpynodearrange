@@ -6,6 +6,7 @@ from statistics import fmean
 from typing import Type, cast
 
 import bpy
+from bl_operators.node_editor.node_functions import node_editor_poll
 from bpy.types import Context, Operator
 from mathutils import Vector
 
@@ -19,14 +20,11 @@ class NodeOperator:
 
     @classmethod
     def poll(cls: Type[Operator], context: Context) -> bool:  # type: ignore
-        ntree = get_ntree()
-
-        if ntree.library:
-            cls.poll_message_set("Current node tree is linked from another .blend file.")
+        if not node_editor_poll(cls, context):
             return False
 
-        if ntree.bl_idname == 'NodeTreeUndefined':
-            cls.poll_message_set("Current node tree is undefined.")
+        if get_ntree().bl_idname == 'NodeTreeUndefined':
+            cls.poll_message_set("Active node tree is undefined.")
             return False
 
         return True
