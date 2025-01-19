@@ -102,7 +102,10 @@ def crossing_reduction_data(
 
             # -------------------------------------------------------------------
 
-            prev_clusters = cast(set[Cluster], set(trees[i - 1]) - G.nodes)
+            prev_clusters = {
+              cast(Cluster, c)
+              for c in trees[i - 1].nodes - G.nodes
+              if any(v.type != GType.CLUSTER for v in trees[i - 1][c])}
             H.constrained_clusters.extend([v for v in H.reduced_free_col if v in prev_clusters])
 
             # -------------------------------------------------------------------
