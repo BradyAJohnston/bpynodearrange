@@ -143,6 +143,12 @@ class ClusterGraph:
         # -------------------------------------------------------------------
 
         long_edges = [(u, v, k) for u, v, k in G.edges(keys=True) if v.rank - u.rank > 1]
+
+        # Sort edges lexicographically so the ordering of columns is the same each time (the
+        # ordering of `long_edges` impacts the ordering of `G`, which impacts the initial ordering
+        # of columns, which under certain conditions impacts the final ordering).
+        long_edges.sort(key=lambda e: e[0].node.name + e[1].node.name)  # type: ignore
+
         pairs = {(u, v) for u, v, _ in long_edges if u.cluster != v.cluster}
         lca = dict(nx.tree_all_pairs_lowest_common_ancestor(T, pairs=pairs))
 
