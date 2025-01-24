@@ -101,6 +101,7 @@ def add_dummy_nodes_to_edge(
 
 # -------------------------------------------------------------------
 
+_FRAME_PADDING = 29.8
 
 # https://api.semanticscholar.org/CorpusID:14932050
 class ClusterGraph:
@@ -212,6 +213,8 @@ class ClusterGraph:
                 upper_v.col = col
                 T.add_edge(c, upper_v)
                 upper_border_nodes.append(upper_v)
+                if c.node.label:
+                    upper_v.height -= _FRAME_PADDING / 2 - c.node.label_size * 1.25
 
             G.add_nodes_from(lower_border_nodes + upper_border_nodes)
             for p in *pairwise(lower_border_nodes), *pairwise(upper_border_nodes):
@@ -325,7 +328,6 @@ def add_columns(G: nx.DiGraph[GNode]) -> None:
 _EDGE_SPACING = 10
 _MIN_X_DIFF = 30
 _MIN_Y_DIFF = 15
-_FRAME_PADDING = 29.8
 _COL_SPACE_FAC = 0.4
 
 
