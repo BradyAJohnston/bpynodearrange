@@ -106,13 +106,10 @@ def batch_modify(bl_data: Iterable[bpy.types.ID], cls: Type[Operator], *, redraw
     return count
 
 
-_BATCH_DESC = "all node trees in the current .blend file with the above settings.\nWarning: May be slow if there are geometry node trees, due to re-evaluation"
-
-
 class NA_OT_BatchArrange(NodeOperator, Operator):
     bl_idname = "node.na_batch_arrange"
     bl_label = "Arrange Node Trees"
-    bl_description = f"Arrange {_BATCH_DESC}"
+    bl_description = "Arrange all node trees in the current .blend file with the above settings.\nWarning: May be slow if there are expensive node trees, due to re-evaluation"
 
     def execute(self, context: Context):
         bl_data = get_all_ntrees()
@@ -142,26 +139,25 @@ class NA_OT_RecenterSelected(NodeOperator, Operator):
 
         if context.scene.na_settings.origin == 'ACTIVE_NODE':  # type: ignore
             if nodes.active in non_frames:
-                origin = -abs_loc(nodes.active)
+                origin = abs_loc(nodes.active)
             else:
                 self.report({'WARNING'}, "No valid active node")
                 return {'CANCELLED'}
         else:
-            origin = -Vector(map(fmean, zip(*map(abs_loc, non_frames))))
+            origin = Vector(map(fmean, zip(*map(abs_loc, non_frames))))
 
-        config.selected = selected
-        for node in {n.parent or n for n in selected}:
-            if node.bl_idname != 'NodeFrame' or not node.parent:
-                move(node, x=origin.x, y=origin.y)
+        # Optimization: use `bpy.ops.transform.translate()` instead of modifying location
+        # properties to prevent node tree re-evaluation.
+        ui_scale = context.preferences.system.ui_scale
+        bpy.ops.transform.translate(value=(*-origin * ui_scale, 0))
 
-        selected.clear()
         return {'FINISHED'}
 
 
 class NA_OT_BatchRecenter(NodeOperator, Operator):
     bl_idname = "node.na_batch_recenter"
     bl_label = "Recenter Node Trees"
-    bl_description = f"Recenter {_BATCH_DESC}"
+    bl_description = "Recenter all node trees in the current .blend file with the above settings"
 
     def execute(self, context: Context) -> set[str]:
         bl_data = get_all_ntrees()
