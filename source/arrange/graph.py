@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import cached_property
@@ -157,6 +158,10 @@ _VISIBLE_PBSDF_SOCKETS = 5
 _SOCKET_SPACING_MULTIPLIER = 22
 
 
+def get_visible_sockets(sockets: Iterable[NodeSocket]) -> list[NodeSocket]:
+    return [s for s in sockets if not s.is_unavailable and not s.hide]
+
+
 @dataclass(frozen=True)
 class Socket:
     owner: GNode
@@ -187,7 +192,7 @@ class Socket:
         outer = cap_width / -3
 
         raw_sockets = node.outputs if self.is_output else node.inputs
-        sockets = [s for s in raw_sockets if not s.is_unavailable]
+        sockets = get_visible_sockets(raw_sockets)
 
         bottom = v.y - v.height
         coords = ((cap_width, v.y), (outer, v.y), (cap_width, bottom), (outer, bottom))
@@ -205,7 +210,7 @@ class Socket:
         v = self.owner
         y = v.y
 
-        inputs = [i for i in node.inputs if not i.is_unavailable and not i.hide]
+        inputs = get_visible_sockets(node.inputs)
         if node.bl_idname != 'ShaderNodeBsdfPrincipled':
             # Start from the bottom socket to avoid any node properties
             y -= v.height - _BOTTOM_OFFSET
@@ -233,7 +238,7 @@ class Socket:
             return self._get_hidden_socket_y()
 
         y = self.owner.y - _TOP_OFFSET
-        outputs = [o for o in node.outputs if not o.is_unavailable and not o.hide]
+        outputs = get_visible_sockets(node.outputs)
         return y - outputs.index(output) * _SOCKET_SPACING_MULTIPLIER
 
     @cached_property
