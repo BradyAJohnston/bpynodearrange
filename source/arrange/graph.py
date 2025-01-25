@@ -173,6 +173,7 @@ class Socket:
         sockets = v.node.outputs if self.is_output else v.node.inputs
         return sockets[self.idx]
 
+    @property
     def x(self) -> float:
         v = self.owner
         return v.x + v.width if self.is_output else v.x

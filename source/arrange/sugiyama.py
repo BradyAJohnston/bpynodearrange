@@ -385,7 +385,7 @@ def route_edges(
         z = GNode(type=GType.DUMMY)
         z.x = col_right if socket.is_output else v.x
 
-        if abs(socket.x() - z.x) <= _MIN_X_DIFF:
+        if abs(socket.x - z.x) <= _MIN_X_DIFF:
             continue
 
         z.y = socket.y
