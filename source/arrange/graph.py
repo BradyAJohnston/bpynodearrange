@@ -10,7 +10,6 @@ from math import inf
 from typing import TYPE_CHECKING, Literal, TypeGuard, cast
 
 from bpy.types import Node, NodeFrame, NodeSocket
-from mathutils import Vector
 from mathutils.geometry import interpolate_bezier
 
 from ..utils import REROUTE_DIM, abs_loc, dimensions, get_bottom, get_top
@@ -155,6 +154,7 @@ _HIDDEN_NODE_FLAT_WIDTH = 116
 _BOTTOM_OFFSET = 14.85
 _TOP_OFFSET = 35
 _VISIBLE_PBSDF_SOCKETS = 5
+_PBSDF_PANELS = ('Subsurface', 'Specular', 'Transmission', 'Coat', 'Sheen', 'Emission')
 _SOCKET_SPACING_MULTIPLIER = 22
 
 
@@ -196,7 +196,7 @@ class Socket:
 
         bottom = v.y - v.height
         coords = ((cap_width, v.y), (outer, v.y), (cap_width, bottom), (outer, bottom))
-        points = interpolate_bezier(*map(Vector, coords), len(sockets) + 2)[1:-1]  # type: ignore
+        points = interpolate_bezier(*coords, len(sockets) + 2)[1:-1]
 
         return points[sockets.index(socket)].y
 
@@ -223,10 +223,10 @@ class Socket:
                     y += _SOCKET_SPACING_MULTIPLIER * 0.909 * len(i.default_value)  # type: ignore
         else:
             y -= 56.5
-            idx = -inputs.index(input)
-            if idx < -_VISIBLE_PBSDF_SOCKETS:
-                panels = ('Subsurface', 'Specular', 'Transmission', 'Coat', 'Sheen', 'Emission')
-                idx = -(_VISIBLE_PBSDF_SOCKETS + 0.5 + panels.index(input.name.split()[0]))
+            idx = inputs.index(input)
+            if idx > _VISIBLE_PBSDF_SOCKETS:
+                idx = _VISIBLE_PBSDF_SOCKETS + 0.5 + _PBSDF_PANELS.index(input.name.split()[0])
+            idx = -idx
 
         return y + idx * _SOCKET_SPACING_MULTIPLIER
 
