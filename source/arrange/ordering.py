@@ -51,7 +51,7 @@ def topologically_sorted_clusters(LT: _MixedGraph) -> list[Cluster]:
 
 @dataclass(slots=True)
 class _ClusterCrossingsData:
-    graph: _MixedGraph
+    graph: nx.MultiDiGraph[GNode | Cluster]
     reduced_free_col: list[GNode | Cluster]
 
     fixed_sockets: dict[GNode, list[Socket]] = field(default_factory=dict)
@@ -64,32 +64,36 @@ class _ClusterCrossingsData:
 
 
 def crossing_reduction_data(
-  G: nx.DiGraph[GNode],
+  G: nx.MultiDiGraph[GNode],
   trees: Sequence[_MixedGraph],
   backwards: bool = False,
 ) -> Iterator[list[_ClusterCrossingsData]]:
+    input_k = 'to_socket'
+    output_k = 'from_socket'
+    if backwards:
+        input_k, output_k = output_k, input_k
+
     for i, LT in enumerate(trees[1:], 1):
         TC = reflexive_transitive_closure(LT)
         data = []
         for h in topologically_sorted_clusters(LT):
-            G_h = nx.DiGraph()
+            G_h = nx.MultiDiGraph()
             H = _ClusterCrossingsData(G_h, list(LT[h]))
 
             G_h.add_nodes_from(LT[h])
-            for s, t, d in G.in_edges(TC[h], data=True):  # type: ignore
+            for s, t, k, d in G.in_edges(TC[h], data=True, keys=True):  # type: ignore
                 c = next(c for c in TC.pred[t] if c in LT[h])
 
-                if (s, c) in G_h.edges:
-                    G_h.edges[s, c]['weight'] += 1
+                if (s, c, k) in G_h.edges and G_h.edges[s, c, k][output_k] == d[output_k]:
+                    G_h.edges[s, c, k]['weight'] += 1
                     continue
 
-                k1 = 'from_socket'
-                k2 = 'to_socket'
-                if d[k1].owner != s:
-                    k1, k2 = k2, k1
+                if c.type != GType.CLUSTER:
+                    to_socket = d[input_k]
+                else:
+                    to_socket = replace(d[input_k], owner=c, idx=0)
 
-                attr = dict(from_socket=replace(d[k1], owner=s), to_socket=replace(d[k2], owner=c))
-                G_h.add_edge(s, c, weight=1, **attr)
+                G_h.add_edge(s, c, weight=1, from_socket=d[output_k], to_socket=to_socket)
 
             # -------------------------------------------------------------------
 
@@ -364,7 +368,7 @@ def minimized_cross_count(
     return old_cross_count
 
 
-def minimize_crossings(G: nx.DiGraph[GNode], T: _MixedGraph) -> None:
+def minimize_crossings(G: nx.MultiDiGraph[GNode], T: _MixedGraph) -> None:
     columns = G.graph['columns']
     trees = get_col_nesting_trees(columns, T)
 
