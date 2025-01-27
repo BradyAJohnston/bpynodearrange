@@ -63,73 +63,75 @@ class _ClusterCrossingsData:
     bipartite_edges: list[tuple[Socket, Socket, int]] = field(default_factory=list)
 
 
+def get_crossing_reduction_graph(
+  h: Cluster,
+  LT: _MixedGraph,
+  G: nx.MultiDiGraph[GNode],
+) -> nx.MultiDiGraph[GNode | Cluster]:
+    G_h = nx.MultiDiGraph()
+    G_h.add_nodes_from(LT[h])
+    TC = reflexive_transitive_closure(LT)
+    for s, t, k, d in G.in_edges(TC[h], data=True, keys=True):  # type: ignore
+        c = next(c for c in TC.pred[t] if c in LT[h])
+
+        input_k = 'to_socket'
+        output_k = 'from_socket'
+        if d[output_k].owner != s:
+            input_k, output_k = output_k, input_k
+
+        if (s, c, k) in G_h.edges and G_h.edges[s, c, k][output_k] == d[output_k]:
+            G_h.edges[s, c, k]['weight'] += 1
+            continue
+
+        to_socket = d[input_k] if c.type != GType.CLUSTER else replace(d[input_k], owner=c, idx=0)
+        G_h.add_edge(s, c, weight=1, from_socket=d[output_k], to_socket=to_socket)
+
+    return G_h
+
+
+def add_bipartite_edges(H: _ClusterCrossingsData) -> None:
+    B = nx.DiGraph()
+    edges = [(d['from_socket'], d['to_socket'], d) for *_, d in H.graph.edges.data()]
+    B.add_edges_from(edges)
+
+    if B.edges:
+        N, S = map(set, zip(*B.edges))
+        if len(S) > len(N):
+            N, S = S, N
+            B = nx.reverse_view(B)
+
+        H.N.extend(sorted(N, key=lambda d: d.idx))
+        H.S.extend(sorted(S, key=lambda d: d.idx))
+
+    H.bipartite_edges.extend(B.edges.data('weight'))
+
+
 def crossing_reduction_data(
   G: nx.MultiDiGraph[GNode],
   trees: Sequence[_MixedGraph],
   backwards: bool = False,
 ) -> Iterator[list[_ClusterCrossingsData]]:
-    input_k = 'to_socket'
-    output_k = 'from_socket'
-    if backwards:
-        input_k, output_k = output_k, input_k
-
     for i, LT in enumerate(trees[1:], 1):
-        TC = reflexive_transitive_closure(LT)
+        prev_clusters = {
+          cast(Cluster, c)
+          for c in trees[i - 1].nodes - G.nodes
+          if any(v.type != GType.CLUSTER for v in trees[i - 1][c])}
+
         data = []
         for h in topologically_sorted_clusters(LT):
-            G_h = nx.MultiDiGraph()
+            G_h = get_crossing_reduction_graph(h, LT, G)
             H = _ClusterCrossingsData(G_h, list(LT[h]))
 
-            G_h.add_nodes_from(LT[h])
-            for s, t, k, d in G.in_edges(TC[h], data=True, keys=True):  # type: ignore
-                c = next(c for c in TC.pred[t] if c in LT[h])
-
-                if (s, c, k) in G_h.edges and G_h.edges[s, c, k][output_k] == d[output_k]:
-                    G_h.edges[s, c, k]['weight'] += 1
-                    continue
-
-                if c.type != GType.CLUSTER:
-                    to_socket = d[input_k]
-                else:
-                    to_socket = replace(d[input_k], owner=c, idx=0)
-
-                G_h.add_edge(s, c, weight=1, from_socket=d[output_k], to_socket=to_socket)
-
-            # -------------------------------------------------------------------
-
-            for u in chain(*[G_h.pred[v] for v in LT[h]]):
+            u: GNode
+            for u in chain(*[G_h.pred[v] for v in LT[h]]):  # pyright: ignore[reportAssignmentType]
                 sockets = {e[2] for e in G_h.out_edges(u, data='from_socket')}
                 H.fixed_sockets[u] = sorted(sockets, key=lambda d: d.idx, reverse=not backwards)
 
             for v in LT[h]:
                 H.free_sockets[v] = [e[2] for e in G_h.in_edges(v, data='from_socket')]
 
-            # -------------------------------------------------------------------
-
-            prev_clusters = {
-              cast(Cluster, c)
-              for c in trees[i - 1].nodes - G.nodes
-              if any(v.type != GType.CLUSTER for v in trees[i - 1][c])}
             H.constrained_clusters.extend([v for v in H.reduced_free_col if v in prev_clusters])
-
-            # -------------------------------------------------------------------
-
-            B = nx.DiGraph()
-            edges = [(d['from_socket'], d['to_socket'], d) for *_, d in G_h.edges.data()]
-            B.add_edges_from(edges)
-
-            if B.edges:
-                N, S = map(set, zip(*B.edges))
-                if len(S) > len(N):
-                    N, S = S, N
-                    B = nx.reverse_view(B)
-
-                H.N.extend(sorted(N, key=lambda d: d.idx))
-                H.S.extend(sorted(S, key=lambda d: d.idx))
-
-            H.bipartite_edges.extend(B.edges.data('weight'))
-
-            # -------------------------------------------------------------------
+            add_bipartite_edges(H)
 
             data.append(H)
 
