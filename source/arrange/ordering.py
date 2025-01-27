@@ -7,13 +7,13 @@
 
 from __future__ import annotations
 
+import random
 from collections import defaultdict
 from collections.abc import Collection, Iterator, Sequence
 from dataclasses import dataclass, field, replace
 from functools import cache
 from itertools import chain, pairwise
 from math import inf
-from random import seed, uniform
 from typing import TypeAlias, cast
 
 import networkx as nx
@@ -158,7 +158,7 @@ def calc_barycenters(H: _ClusterCrossingsData) -> None:
             continue
 
         weight = sum([s.owner.cr.socket_ranks[s] for s in sockets])
-        weight += uniform(0, 1) * _RANDOM_AMOUNT - _RANDOM_AMOUNT / 2
+        weight += random.uniform(0, 1) * _RANDOM_AMOUNT - _RANDOM_AMOUNT / 2
         w.cr.barycenter = weight / len(sockets)
 
 
@@ -173,7 +173,7 @@ def fill_in_unknown_barycenters(col: list[GNode | Cluster], is_first_iter: bool)
         max_b = max([b for v in col if (b := v.cr.barycenter) is not None], default=0) + 2
         for v in col:
             if v.cr.barycenter is None:
-                v.cr.barycenter = uniform(0, 1) * max_b - 1
+                v.cr.barycenter = random.uniform(0, 1) * max_b - 1
         return
 
     for i, v in enumerate(col):
@@ -376,7 +376,7 @@ def minimize_crossings(G: nx.DiGraph[GNode], T: _MixedGraph) -> None:
 
     # -------------------------------------------------------------------
 
-    seed(0)
+    random.seed(0)
     best_cross_count = inf
     best_columns = [c.copy() for c in columns]
     for _ in range(_ITERATIONS):
