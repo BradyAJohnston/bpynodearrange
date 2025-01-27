@@ -138,11 +138,11 @@ _FreeColumns = list[tuple[list[GNode], _MixedGraph, list[_ClusterCrossingsData]]
 _RANDOM_AMOUNT = 0.07
 
 
-def calc_socket_ranks(H: _ClusterCrossingsData, forwards: bool) -> None:
+def calc_socket_ranks(H: _ClusterCrossingsData, is_forwards: bool) -> None:
     for v, sockets in H.fixed_sockets.items():
         incr = 1 / (len(sockets) + 1)
         rank = v.col.index(v) + 1
-        if forwards:
+        if is_forwards:
             incr = -incr
 
         for socket in sockets:
@@ -318,33 +318,33 @@ def minimized_cross_count(
   backward_items: _FreeColumns,
 ) -> float:
     nodes_and_clusters = tuple(chain(*[i[1] for i in forward_items]))
-    i = -1
     cross_count = inf
+    is_forwards = random.choice((True, False))
+    is_first_sweep = True
     while True:
         for v in nodes_and_clusters:
             v.cr.reset()
 
-        i += 1
-        old_cross_count = cross_count
-
         if cross_count == 0:
-            break
+            return 0
 
-        forwards = i % 2 == 0
-        items = forward_items if forwards else backward_items
+        is_forwards = not is_forwards
+        old_cross_count = cross_count
         cross_count = 0
+
+        items = forward_items if is_forwards else backward_items
         for j, (free_col, LT, data) in enumerate(items):
             if j == 0:
-                fixed_col = columns[0] if forwards else columns[-1]
+                fixed_col = columns[0] if is_forwards else columns[-1]
                 key = [v.cluster for v in fixed_col].index
             else:
                 key = get_barycenter
 
             for H in data:
                 H.constrained_clusters.sort(key=key)
-                calc_socket_ranks(H, forwards)
+                calc_socket_ranks(H, is_forwards)
                 calc_barycenters(H)
-                fill_in_unknown_barycenters(H.reduced_free_col, i == 0)
+                fill_in_unknown_barycenters(H.reduced_free_col, is_first_sweep)
                 handle_constraints(H)
                 cross_count += get_cross_count(H)
 
@@ -355,9 +355,10 @@ def minimized_cross_count(
         if old_cross_count > cross_count:
             sort_internal_columns(forward_items + backward_items)
             best_columns = [c.copy() for c in columns]
+            is_first_sweep = False
         else:
-            for col, best_col in zip(columns, best_columns):
-                col.sort(key=best_col.index)
+            for first_col, best_col in zip(columns, best_columns):
+                first_col.sort(key=best_col.index)
             break
 
     return old_cross_count
