@@ -510,7 +510,7 @@ def simplify_segment(CG: ClusterGraph, aligned: Sequence[GNode], path: list[GNod
     elif G.out_degree[v] == 1 and v.y == (s := next(iter(G.out_edges(v, data='to_socket')))[2]).y:
         G.add_edge(u, s.owner, from_socket=Socket(u, 0, True), to_socket=s)
         between.append(v)
-    else:
+    elif between:
         add_dummy_edge(G, u, v)
 
     CG.remove_nodes_from(between)
@@ -551,6 +551,22 @@ def realize_dummy_nodes(CG: ClusterGraph) -> None:
                 add_reroute(v)
 
             realize_edges(CG.G, v)
+
+
+def reorder_multi_inputs(G: nx.MultiDiGraph[GNode]) -> None:
+    groups = group_by(G.in_edges(keys=True), key=lambda e: G.edges[e]['to_socket'])
+    links = {(l.from_socket, l.to_socket): l for l in get_ntree().links}
+    for edges, to_socket in groups.items():
+        if len(edges) < 2:
+            continue
+
+        from_sockets = [cast(Socket, G.edges[e]['from_socket']) for e in edges]
+        from_sockets.sort(key=lambda s: s.owner.y)
+        as_links = [links[s.bpy, to_socket.bpy] for s in from_sockets]  # type: ignore
+
+        for i, link in enumerate(as_links):
+            other = min(as_links, key=lambda l: abs(l.multi_input_sort_id - i))
+            link.swap_multi_input_sort_id(other)
 
 
 def realize_locations(G: nx.DiGraph[GNode], old_center: Vector) -> None:
@@ -605,4 +621,5 @@ def sugiyama_layout(ntree: NodeTree) -> None:
     route_edges(G, CG.T)
 
     realize_dummy_nodes(CG)
+    reorder_multi_inputs(G)
     realize_locations(G, old_center)
