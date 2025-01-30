@@ -84,7 +84,8 @@ def add_dummy_nodes_to_edge(
     d = G.edges[edge]  # type: ignore
 
     w = dummy_nodes[0]
-    G.add_edge(u, w, from_socket=d['from_socket'], to_socket=Socket(w, 0, False))
+    if w not in G[u]:
+        G.add_edge(u, w, from_socket=d['from_socket'], to_socket=Socket(w, 0, False))
 
     z = dummy_nodes[-1]
     G.add_edge(z, v, from_socket=Socket(z, 0, True), to_socket=d['to_socket'])
@@ -150,6 +151,39 @@ class ClusterGraph:
 
             config.selected.remove(v.node)
             ntree.nodes.remove(v.node)
+
+    def merge_edges(self) -> None:
+        G = self.G
+        T = self.T
+        groups = group_by(G.edges(keys=True), key=lambda e: G.edges[e]['from_socket'])
+        edges: tuple[tuple[GNode, GNode, int], ...]
+        for edges, from_socket in groups.items():
+            long_edges = [(u, v, k) for u, v, k in edges if v.rank - u.rank > 1]
+
+            if len(long_edges) < 2:
+                continue
+
+            long_edges.sort(key=lambda e: e[1].rank)
+            lca = lowest_common_cluster(T, long_edges)
+            dummy_nodes = []
+            for u, v, k in long_edges:
+                if dummy_nodes and dummy_nodes[-1].rank == v.rank - 1:
+                    w = dummy_nodes[-1]
+                else:
+                    assert u.cluster
+                    c = lca.get((u, v), u.cluster)
+                    w = GNode(None, c, GType.DUMMY, v.rank - 1)
+                    T.add_edge(c, w)
+                    dummy_nodes.append(w)
+
+                add_dummy_nodes_to_edge(G, (u, v, k), [w])
+                G.remove_edge(u, w)
+
+            for pair in pairwise(dummy_nodes):
+                add_dummy_edge(G, *pair)
+
+            w = dummy_nodes[0]
+            G.add_edge(u, dummy_nodes[0], from_socket=from_socket, to_socket=Socket(w, 0, False))
 
     def insert_dummy_nodes(self) -> None:
         G = self.G
@@ -603,6 +637,7 @@ def sugiyama_layout(ntree: NodeTree) -> None:
     remove_reroutes(CG)
 
     compute_ranks(CG)
+    CG.merge_edges()
     CG.insert_dummy_nodes()
 
     G = CG.G
