@@ -103,6 +103,7 @@ def add_dummy_nodes_to_edge(
 
 _FRAME_PADDING = 29.8
 
+
 # https://api.semanticscholar.org/CorpusID:14932050
 class ClusterGraph:
     G: nx.MultiDiGraph[GNode]
@@ -325,11 +326,6 @@ def add_columns(G: nx.DiGraph[GNode]) -> None:
 
 # -------------------------------------------------------------------
 
-_EDGE_SPACING = 10
-_MIN_X_DIFF = 30
-_MIN_Y_DIFF = 15
-_COL_SPACE_FAC = 0.4
-
 
 def align_reroutes_with_sockets(G: nx.DiGraph[GNode]) -> None:
     reroute_paths: dict[tuple[GNode, ...], list[Socket]] = {}
@@ -374,55 +370,24 @@ def align_reroutes_with_sockets(G: nx.DiGraph[GNode]) -> None:
                 break
 
 
-def route_edges(
-  G: nx.MultiDiGraph[GNode],
-  v: GNode,
-  bend_points: defaultdict[tuple[GNode, GNode, int], list[GNode]],
-) -> None:
-    col_right = max([w.x + w.width for w in v.col])
-    for u, w, k, d in *G.in_edges(v, data=True, keys=True), *G.out_edges(v, data=True, keys=True):
-        socket = d['from_socket'] if v == u else d['to_socket']
-        z = GNode(type=GType.DUMMY)
-        z.x = col_right if socket.is_output else v.x
-
-        if abs(socket.x - z.x) <= _MIN_X_DIFF:
-            continue
-
-        z.y = socket.y
-
-        other_socket = next(s for s in d.values() if s != socket)
-        if abs(other_socket.y - z.y) <= _MIN_Y_DIFF:
-            continue
-
-        if socket.is_output:
-            bend_points[u, w, k].insert(0, z)
-        else:
-            bend_points[u, w, k].append(z)
+_EDGE_SPACE_REDUCTION = 63
 
 
-def assign_x_coords_and_route_edges(
-  G: nx.MultiDiGraph[GNode],
-  T: nx.DiGraph[GNode | Cluster],
-) -> None:
-    bend_points = defaultdict(list)
-
+def assign_x_coords(G: nx.DiGraph[GNode]) -> None:
     columns: list[list[GNode]] = G.graph['columns']
     x = 0
-    edge_space_fac = min(1, _EDGE_SPACING / config.MARGIN.x)
+    edge_space_fac = config.MARGIN.x / (_EDGE_SPACE_REDUCTION * 10)
     for i, col in enumerate(columns):
         max_width = max([v.width for v in col])
 
-        for v in col:
-            v.x = x if v.is_reroute else x - (v.width - max_width) / 2
-
         y_diffs = []
         for v in col:
+            v.x = x if v.is_reroute else x - (v.width - max_width) / 2
             y_diffs.extend([
               abs(d['to_socket'].y - d['from_socket'].y) for *_, d in G.out_edges(v, data=True)])
-            route_edges(G, v, bend_points)
 
         max_y_diff = max(y_diffs, default=0)
-        x += max_width + _COL_SPACE_FAC * edge_space_fac * max_y_diff + config.MARGIN.x
+        x += max_width + edge_space_fac * max_y_diff + config.MARGIN.x
 
         if col == columns[-1]:
             continue
@@ -430,23 +395,64 @@ def assign_x_coords_and_route_edges(
         if {v.cluster for v in col} ^ {v.cluster for v in columns[i + 1]}:
             x += _FRAME_PADDING
 
-    # -------------------------------------------------------------------
 
-    edge_of = {w: k for k, v in bend_points.items() for w in v}
-    for target, *redundant in group_by(edge_of, key=lambda v: (edge_of[v][0], v.x, v.y)):
+_MIN_X_DIFF = 30
+_MIN_Y_DIFF = 15
+
+
+def add_bend_points(
+  G: nx.MultiDiGraph[GNode],
+  v: GNode,
+  bend_points: defaultdict[tuple[GNode, GNode, int], list[GNode]],
+) -> None:
+    d: dict[str, Socket]
+    largest = max(v.col, key=lambda w: w.width)
+    for u, w, k, d in *G.out_edges(v, data=True, keys=True), *G.in_edges(v, data=True, keys=True):
+        socket = d['from_socket'] if v == u else d['to_socket']
+        bend_point = GNode(type=GType.DUMMY)
+        bend_point.x = largest.x + largest.width if socket.is_output else largest.x
+
+        if abs(socket.x - bend_point.x) <= _MIN_X_DIFF:
+            continue
+
+        bend_point.y = socket.y
+        other_socket = next(s for s in d.values() if s != socket)
+
+        if abs(other_socket.y - bend_point.y) <= _MIN_Y_DIFF:
+            continue
+
+        bend_points[u, w, k].append(bend_point)
+
+
+def route_edges(G: nx.MultiDiGraph[GNode], T: nx.DiGraph[GNode | Cluster]) -> None:
+    bend_points = defaultdict(list)
+    for v in chain(*G.graph['columns']):
+        add_bend_points(G, v, bend_points)
+
+    edge_of = {v: e for e, d in bend_points.items() for v in d}
+    key = lambda v: (G.edges[edge_of[v]]['from_socket'], v.x, v.y)
+    for (target, *redundant), (from_socket, *_) in group_by(edge_of, key=key).items():
         for v in redundant:
             dummy_nodes = bend_points[edge_of[v]]
             dummy_nodes[dummy_nodes.index(v)] = target
 
-    # -------------------------------------------------------------------
+        u = from_socket.owner
+        if not u.is_reroute or G.out_degree[u] < 2:  # type: ignore
+            continue
+
+        for e in G.out_edges(u, keys=True):
+            if target not in bend_points[e]:
+                bend_points[e].append(target)
 
     pairs = {(u, v) for u, v, k in bend_points}
     lca = dict(nx.tree_all_pairs_lowest_common_ancestor(T, pairs=pairs))
-    for e, dummy_nodes in bend_points.items():
-        add_dummy_nodes_to_edge(G, e, dummy_nodes)
-        c = lca[*e[:2]]
-        for v in dummy_nodes:
-            v.cluster = c
+    for (u, v, k), dummy_nodes in bend_points.items():
+        dummy_nodes.sort(key=lambda v: v.x)
+        add_dummy_nodes_to_edge(G, (u, v, k), dummy_nodes)
+
+        c = lca.get((u, v), u.cluster)
+        for w in dummy_nodes:
+            w.cluster = c
 
 
 # -------------------------------------------------------------------
@@ -515,6 +521,7 @@ def realize_locations(G: nx.DiGraph[GNode], old_center: Vector) -> None:
     for v in G:
         assert isinstance(v.node, Node)
         assert v.cluster
+        
         # Optimization: avoid using bpy.ops for as many nodes as possible (see `utils.move()`)
         v.node.parent = None
 
@@ -555,7 +562,8 @@ def sugiyama_layout(ntree: NodeTree) -> None:
         CG.remove_nodes_from([v for v in G if v.type == GType.VERTICAL_BORDER])
 
     align_reroutes_with_sockets(G)
-    assign_x_coords_and_route_edges(G, CG.T)
+    assign_x_coords(G)
+    route_edges(G, CG.T)
 
     realize_dummy_nodes(CG)
     realize_locations(G, old_center)
