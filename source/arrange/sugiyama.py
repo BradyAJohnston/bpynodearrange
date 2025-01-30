@@ -112,6 +112,10 @@ def lowest_common_cluster(
     return dict(nx.tree_all_pairs_lowest_common_ancestor(T, pairs=pairs))
 
 
+def label_height(c: Cluster) -> float:
+    return -(_FRAME_PADDING / 2 - c.node.label_size * 1.25) if c.node and c.node.label else 0
+
+
 # https://api.semanticscholar.org/CorpusID:14932050
 class ClusterGraph:
     G: nx.MultiDiGraph[GNode]
@@ -210,6 +214,7 @@ class ClusterGraph:
                 lower_border_nodes.append(lower_v)
 
                 upper_v = GNode(None, c, GType.VERTICAL_BORDER)
+                upper_v.height += label_height(c)
                 col.insert(min(indices), upper_v)
                 upper_v.col = col
                 T.add_edge(c, upper_v)
