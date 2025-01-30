@@ -104,6 +104,14 @@ def add_dummy_nodes_to_edge(
 _FRAME_PADDING = 29.8
 
 
+def lowest_common_cluster(
+  T: nx.DiGraph[GNode | Cluster],
+  edges: Iterable[tuple[GNode, GNode, Any]],
+) -> dict[tuple[GNode, GNode], Cluster]:
+    pairs = {(u, v) for u, v, _ in edges if u.cluster != v.cluster}
+    return dict(nx.tree_all_pairs_lowest_common_ancestor(T, pairs=pairs))
+
+
 # https://api.semanticscholar.org/CorpusID:14932050
 class ClusterGraph:
     G: nx.MultiDiGraph[GNode]
@@ -145,18 +153,10 @@ class ClusterGraph:
         # -------------------------------------------------------------------
 
         long_edges = [(u, v, k) for u, v, k in G.edges(keys=True) if v.rank - u.rank > 1]
-
-        # Sort edges lexicographically so the ordering of columns is the same each time (the
-        # ordering of `long_edges` impacts the ordering of `G`, which impacts the initial ordering
-        # of columns, which under certain conditions impacts the final ordering).
-        long_edges.sort(key=lambda e: e[0].node.name + e[1].node.name)  # type: ignore
-
-        pairs = {(u, v) for u, v, _ in long_edges if u.cluster != v.cluster}
-        lca = dict(nx.tree_all_pairs_lowest_common_ancestor(T, pairs=pairs))
-
+        lca = lowest_common_cluster(T, long_edges)
         for u, v, k in long_edges:
-            c = lca[(u, v)] if (u, v) in pairs else u.cluster
-            assert isinstance(c, Cluster)
+            assert u.cluster
+            c = lca.get((u, v), u.cluster)
             dummy_nodes = []
             for i in range(u.rank + 1, v.rank):
                 w = GNode(None, c, GType.DUMMY, i)
@@ -444,8 +444,7 @@ def route_edges(G: nx.MultiDiGraph[GNode], T: nx.DiGraph[GNode | Cluster]) -> No
             if target not in bend_points[e]:
                 bend_points[e].append(target)
 
-    pairs = {(u, v) for u, v, k in bend_points}
-    lca = dict(nx.tree_all_pairs_lowest_common_ancestor(T, pairs=pairs))
+    lca = lowest_common_cluster(T, bend_points)
     for (u, v, k), dummy_nodes in bend_points.items():
         dummy_nodes.sort(key=lambda v: v.x)
         add_dummy_nodes_to_edge(G, (u, v, k), dummy_nodes)
