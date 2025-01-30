@@ -504,7 +504,7 @@ def simplify_segment(CG: ClusterGraph, aligned: Sequence[GNode], path: list[GNod
     u, *between, v = aligned
     G = CG.G
 
-    if (s := next(iter(G.in_edges(u, data='from_socket')))[2]).y == u.y:
+    if G.pred[u] and (s := next(iter(G.in_edges(u, data='from_socket')))[2]).y == u.y:
         G.add_edge(s.owner, v, from_socket=s, to_socket=Socket(v, 0, False))
         between.append(u)
     elif G.out_degree[v] == 1 and v.y == (s := next(iter(G.out_edges(v, data='to_socket')))[2]).y:
