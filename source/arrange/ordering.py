@@ -2,6 +2,7 @@
 
 # https://link.springer.com/chapter/10.1007/3-540-36151-0_26
 # https://doi.org/10.1016/j.jvlc.2013.11.005
+# https://doi.org/10.1007/978-3-642-11805-0_14
 # https://link.springer.com/chapter/10.1007/978-3-540-31843-9_22
 # https://doi.org/10.7155/jgaa.00088
 
@@ -315,8 +316,6 @@ def sort_internal_columns(items: _FreeColumns) -> None:
 
 # -------------------------------------------------------------------
 
-_ITERATIONS = 15
-
 
 def minimized_cross_count(
   columns: Sequence[list[GNode]],
@@ -363,11 +362,14 @@ def minimized_cross_count(
             best_columns = [c.copy() for c in columns]
             is_first_sweep = False
         else:
-            for col, best_col in zip(columns, best_columns):
-                col.sort(key=best_col.index)
+            for first_col, best_col in zip(columns, best_columns):
+                first_col.sort(key=best_col.index)
             break
 
     return old_cross_count
+
+
+_ITERATIONS = 15
 
 
 def minimize_crossings(G: nx.MultiDiGraph[GNode], T: _MixedGraph) -> None:
