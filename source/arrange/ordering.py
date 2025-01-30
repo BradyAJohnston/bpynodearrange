@@ -398,3 +398,4 @@ def minimize_crossings(G: nx.MultiDiGraph[GNode], T: _MixedGraph) -> None:
         else:
             for col, best_col in zip(columns, best_columns):
                 col.sort(key=best_col.index)
+            sort_internal_columns(forward_items + backward_items)
