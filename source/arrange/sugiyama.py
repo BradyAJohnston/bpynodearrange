@@ -6,11 +6,12 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from itertools import chain, pairwise
 from statistics import fmean
-from typing import cast
+from typing import Any, cast
 
 import networkx as nx
 from bpy.types import Node, NodeFrame, NodeTree
 from mathutils import Vector
+from mathutils.geometry import intersect_line_line_2d
 
 from .. import config
 from ..utils import abs_loc, get_ntree, group_by, move
@@ -219,8 +220,6 @@ class ClusterGraph:
                 upper_v.col = col
                 T.add_edge(c, upper_v)
                 upper_border_nodes.append(upper_v)
-                if c.node.label:
-                    upper_v.height -= _FRAME_PADDING / 2 - c.node.label_size * 1.25
 
             G.add_nodes_from(lower_border_nodes + upper_border_nodes)
             for p in *pairwise(lower_border_nodes), *pairwise(upper_border_nodes):
@@ -401,6 +400,39 @@ def assign_x_coords(G: nx.DiGraph[GNode]) -> None:
             x += _FRAME_PADDING
 
 
+def is_unnecessary_bend_point(socket: Socket, other_socket: Socket) -> bool:
+    v = socket.owner
+
+    if v.is_reroute:
+        return False
+
+    i = v.col.index(v)
+    is_above = other_socket.y > socket.y
+
+    try:
+        nbr = v.col[i - 1] if is_above else v.col[i + 1]
+    except IndexError:
+        return True
+
+    if nbr.is_reroute:
+        return True
+
+    nbr_x_offset, nbr_y_offset = config.MARGIN / 2
+    nbr_y = nbr.y - nbr.height - nbr_y_offset if is_above else nbr.y + nbr_y_offset
+
+    assert nbr.cluster
+    if nbr.cluster.node and nbr.cluster != v.cluster:
+        nbr_x_offset += _FRAME_PADDING
+        if is_above:
+            nbr_y -= _FRAME_PADDING
+        else:
+            nbr_y += _FRAME_PADDING + label_height(nbr.cluster)
+
+    line_a = ((nbr.x - nbr_x_offset, nbr_y), (nbr.x + nbr.width + nbr_x_offset, nbr_y))
+    line_b = ((socket.x, socket.y), (other_socket.x, other_socket.y))
+    return intersect_line_line_2d(*line_a, *line_b) is None
+
+
 _MIN_X_DIFF = 30
 _MIN_Y_DIFF = 15
 
@@ -424,6 +456,9 @@ def add_bend_points(
         other_socket = next(s for s in d.values() if s != socket)
 
         if abs(other_socket.y - bend_point.y) <= _MIN_Y_DIFF:
+            continue
+
+        if is_unnecessary_bend_point(socket, other_socket):
             continue
 
         bend_points[u, w, k].append(bend_point)
@@ -525,7 +560,7 @@ def realize_locations(G: nx.DiGraph[GNode], old_center: Vector) -> None:
     for v in G:
         assert isinstance(v.node, Node)
         assert v.cluster
-        
+
         # Optimization: avoid using bpy.ops for as many nodes as possible (see `utils.move()`)
         v.node.parent = None
 
