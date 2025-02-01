@@ -70,6 +70,8 @@ class GNode:
     sink: GNode
     shift: float
 
+    multi_input_sort_ids: defaultdict[Socket, dict[Socket, int]]
+
     __slots__ = tuple(__annotations__)
 
     def __init__(
@@ -107,6 +109,8 @@ class GNode:
         self.reset()
 
         self.segment = None  # type: ignore
+
+        self.multi_input_sort_ids = defaultdict(dict)
 
     def __hash__(self) -> int:
         return id(self)

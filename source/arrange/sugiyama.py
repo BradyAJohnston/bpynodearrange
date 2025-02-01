@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator, Sequence
-from itertools import chain, pairwise
+from itertools import chain, pairwise, product
 from statistics import fmean
 from typing import Any, cast
 
@@ -60,6 +60,23 @@ def get_nesting_relations(v: GNode | Cluster) -> Iterator[tuple[Cluster, GNode |
     if c := v.cluster:
         yield (c, v)
         yield from get_nesting_relations(c)
+
+
+def save_multi_input_orders(G: nx.MultiDiGraph[GNode]) -> None:
+    links = {(l.from_socket, l.to_socket): l for l in get_ntree().links}
+    for v, w, d in G.edges.data():
+        to_socket = d['to_socket']
+
+        if not to_socket.bpy.is_multi_input:
+            continue
+
+        base_from_socket = next(
+          G.edges[u, z, 0]['from_socket']
+          for z, u in chain([(w, v)], nx.bfs_edges(G, v, reverse=True))
+          if not u.is_reroute)
+
+        link = links[(d['from_socket'].bpy, to_socket.bpy)]
+        w.multi_input_sort_ids[to_socket][base_from_socket] = link.multi_input_sort_id
 
 
 # -------------------------------------------------------------------
@@ -279,6 +296,9 @@ def get_reroute_paths(G: nx.DiGraph[GNode], function: Callable | None = None) ->
 def is_safe_to_remove(v: GNode) -> bool:
     if not is_real(v):
         return True
+
+    if v.node.label:
+        return False
 
     return all(
       s.node.select for s in chain(
@@ -587,20 +607,32 @@ def realize_dummy_nodes(CG: ClusterGraph) -> None:
             realize_edges(CG.G, v)
 
 
-def reorder_multi_inputs(G: nx.MultiDiGraph[GNode]) -> None:
-    groups = group_by(G.in_edges(keys=True), key=lambda e: G.edges[e]['to_socket'])
-    links = {(l.from_socket, l.to_socket): l for l in get_ntree().links}
-    for edges, to_socket in groups.items():
-        if len(edges) < 2:
-            continue
+def restore_multi_input_orders(G: nx.MultiDiGraph[GNode]) -> None:
+    H: nx.DiGraph[Socket] = nx.DiGraph()
+    H.add_edges_from([(d['from_socket'], d['to_socket']) for *_, d in G.edges.data()])
+    for sockets in group_by(H, key=lambda s: s.owner):
+        outputs = {s for s in sockets if s.is_output}
+        H.add_edges_from(product(set(sockets) - outputs, outputs))
 
-        from_sockets = [cast(Socket, G.edges[e]['from_socket']) for e in edges]
-        from_sockets.sort(key=lambda s: s.owner.y)
-        as_links = [links[s.bpy, to_socket.bpy] for s in from_sockets]  # type: ignore
+    links = get_ntree().links
+    for v in G:
+        for socket, sort_ids in v.multi_input_sort_ids.items():
+            multi_input = socket.bpy
+            assert multi_input
 
-        for i, link in enumerate(as_links):
-            other = min(as_links, key=lambda l: abs(l.multi_input_sort_id - i))
-            link.swap_multi_input_sort_id(other)
+            as_links = {l.from_socket: l for l in links if l.to_socket == multi_input}
+
+            if len(as_links) != len({l.multi_input_sort_id for l in as_links.values()}):
+                for link in as_links.values():
+                    links.remove(link)
+
+                for output in as_links:
+                    as_links[output] = links.new(output, multi_input)
+
+            for base_from_socket, sort_id in sort_ids.items():
+                other = min(as_links.values(), key=lambda l: abs(l.multi_input_sort_id - sort_id))
+                from_socket = next(s for s, t in nx.dfs_edges(H, base_from_socket) if t == socket)
+                as_links[from_socket.bpy].swap_multi_input_sort_id(other)  # type: ignore
 
 
 def realize_locations(G: nx.DiGraph[GNode], old_center: Vector) -> None:
@@ -633,14 +665,15 @@ def sugiyama_layout(ntree: NodeTree) -> None:
 
     precompute_links(ntree)
     CG = ClusterGraph(get_multidigraph())
+    G = CG.G
 
+    save_multi_input_orders(G)
     remove_reroutes(CG)
 
     compute_ranks(CG)
     CG.merge_edges()
     CG.insert_dummy_nodes()
 
-    G = CG.G
     add_columns(G)
     minimize_crossings(G, CG.T)
 
@@ -656,5 +689,5 @@ def sugiyama_layout(ntree: NodeTree) -> None:
     route_edges(G, CG.T)
 
     realize_dummy_nodes(CG)
-    reorder_multi_inputs(G)
+    restore_multi_input_orders(G)
     realize_locations(G, old_center)
