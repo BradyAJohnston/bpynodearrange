@@ -29,7 +29,7 @@ class NA_PT_ArrangeSelected(NodePanel, Panel):
 
         layout.operator("node.na_arrange_selected")
         layout.prop(settings, "margin")
-        layout.prop(settings, 'balance')
+        layout.prop(settings, "balance")
 
         header, panel = layout.panel("batch_arrange", default_closed=True)
         header.label(text="Batch Arrange")
