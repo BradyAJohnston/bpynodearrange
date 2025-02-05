@@ -19,3 +19,15 @@ multi_input_sort_ids: defaultdict[Socket, dict[Socket, int]] = defaultdict(dict)
 
 SETTINGS: NA_PG_Settings
 MARGIN: Vector
+
+
+def reset() -> None:
+    selected.clear()
+    linked_sockets.clear()
+    multi_input_sort_ids.clear()
+
+    global SETTINGS
+    SETTINGS = None  # type: ignore
+
+    global MARGIN
+    MARGIN = None  # type: ignore

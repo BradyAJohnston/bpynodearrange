@@ -47,12 +47,10 @@ class NA_OT_ArrangeSelected(NodeOperator, Operator):
         config.SETTINGS = context.scene.na_settings  # type: ignore
         config.MARGIN = Vector(config.SETTINGS.margin).freeze()
 
-        sugiyama_layout(ntree)
-
-        selected.clear()
-        config.linked_sockets.clear()
-        config.multi_input_sort_ids.clear()
-        config.SETTINGS = None
+        try:
+            sugiyama_layout(ntree)
+        finally:
+            config.reset()
 
         return {'FINISHED'}
 
