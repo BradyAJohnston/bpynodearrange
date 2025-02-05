@@ -70,13 +70,15 @@ def save_multi_input_orders(G: nx.MultiDiGraph[GNode]) -> None:
         if not to_socket.bpy.is_multi_input:
             continue
 
-        base_from_socket = next(
-          G.edges[u, z, 0]['from_socket']
-          for z, u in chain([(w, v)], nx.bfs_edges(G, v, reverse=True))
-          if not u.is_reroute)
+        for z, u in chain([(w, v)], nx.bfs_edges(G, v, reverse=True)):
+            if not u.is_reroute:
+                break
+
+        # If there's no non-reroute ancestor, the last edge is used.
+        base_from_socket = G.edges[u, z, 0]['from_socket']
 
         link = links[(d['from_socket'].bpy, to_socket.bpy)]
-        w.multi_input_sort_ids[to_socket][base_from_socket] = link.multi_input_sort_id
+        config.multi_input_sort_ids[to_socket][base_from_socket] = link.multi_input_sort_id
 
 
 # -------------------------------------------------------------------
@@ -298,6 +300,9 @@ def is_safe_to_remove(v: GNode) -> bool:
         return True
 
     if v.node.label:
+        return False
+
+    if v in {w.owner for w in chain(*config.multi_input_sort_ids.values())}:
         return False
 
     return all(
@@ -615,24 +620,23 @@ def restore_multi_input_orders(G: nx.MultiDiGraph[GNode]) -> None:
         H.add_edges_from(product(set(sockets) - outputs, outputs))
 
     links = get_ntree().links
-    for v in G:
-        for socket, sort_ids in v.multi_input_sort_ids.items():
-            multi_input = socket.bpy
-            assert multi_input
+    for socket, sort_ids in config.multi_input_sort_ids.items():
+        multi_input = socket.bpy
+        assert multi_input
 
-            as_links = {l.from_socket: l for l in links if l.to_socket == multi_input}
+        as_links = {l.from_socket: l for l in links if l.to_socket == multi_input}
 
-            if len(as_links) != len({l.multi_input_sort_id for l in as_links.values()}):
-                for link in as_links.values():
-                    links.remove(link)
+        if len(as_links) != len({l.multi_input_sort_id for l in as_links.values()}):
+            for link in as_links.values():
+                links.remove(link)
 
-                for output in as_links:
-                    as_links[output] = links.new(output, multi_input)
+            for output in as_links:
+                as_links[output] = links.new(output, multi_input)
 
-            for base_from_socket, sort_id in sort_ids.items():
-                other = min(as_links.values(), key=lambda l: abs(l.multi_input_sort_id - sort_id))
-                from_socket = next(s for s, t in nx.dfs_edges(H, base_from_socket) if t == socket)
-                as_links[from_socket.bpy].swap_multi_input_sort_id(other)  # type: ignore
+        for base_from_socket, sort_id in sort_ids.items():
+            other = min(as_links.values(), key=lambda l: abs(l.multi_input_sort_id - sort_id))
+            from_socket = next(s for s, t in nx.dfs_edges(H, base_from_socket) if t == socket)
+            as_links[from_socket.bpy].swap_multi_input_sort_id(other)  # type: ignore
 
 
 def realize_locations(G: nx.DiGraph[GNode], old_center: Vector) -> None:

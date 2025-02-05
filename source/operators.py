@@ -51,6 +51,7 @@ class NA_OT_ArrangeSelected(NodeOperator, Operator):
 
         selected.clear()
         config.linked_sockets.clear()
+        config.multi_input_sort_ids.clear()
         config.SETTINGS = None
 
         return {'FINISHED'}
