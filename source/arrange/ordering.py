@@ -113,11 +113,7 @@ def crossing_reduction_data(
   backwards: bool = False,
 ) -> Iterator[list[_ClusterCrossingsData]]:
     for i, LT in enumerate(trees[1:], 1):
-        prev_clusters = {
-          cast(Cluster, c)
-          for c in trees[i - 1].nodes - G.nodes
-          if any(v.type != GType.CLUSTER for v in trees[i - 1][c])}
-
+        prev_clusters = cast(set[Cluster], set(trees[i - 1]) - G.nodes)
         data = []
         for h in topologically_sorted_clusters(LT):
             G_h = get_crossing_reduction_graph(h, LT, G)
@@ -321,13 +317,13 @@ def minimized_cross_count(
   columns: Sequence[list[GNode]],
   forward_items: _FreeColumns,
   backward_items: _FreeColumns,
+  T: _MixedGraph,
 ) -> float:
-    nodes_and_clusters = tuple(chain(*[i[1] for i in forward_items]))
     cross_count = inf
     is_forwards = random.choice((True, False))
     is_first_sweep = True
     while True:
-        for v in nodes_and_clusters:
+        for v in T:
             v.cr.reset()
 
         if cross_count == 0:
@@ -338,15 +334,16 @@ def minimized_cross_count(
         cross_count = 0
 
         items = forward_items if is_forwards else backward_items
-        for j, (free_col, LT, data) in enumerate(items):
-            if j == 0:
+        for i, (free_col, LT, data) in enumerate(items):
+            if i == 0:
                 fixed_col = columns[0] if is_forwards else columns[-1]
-                key = [v.cluster for v in fixed_col].index
+                clusters = {c: j for j, v in enumerate(fixed_col) for c in nx.ancestors(T, v)}
+                key = clusters.get
             else:
                 key = get_barycenter
 
             for H in data:
-                H.constrained_clusters.sort(key=key)
+                H.constrained_clusters.sort(key=key)  # pyright: ignore[reportArgumentType]
                 calc_socket_ranks(H, is_forwards)
                 calc_barycenters(H)
                 fill_in_unknown_barycenters(H.reduced_free_col, is_first_sweep)
@@ -389,7 +386,7 @@ def minimize_crossings(G: nx.MultiDiGraph[GNode], T: _MixedGraph) -> None:
     best_cross_count = inf
     best_columns = [c.copy() for c in columns]
     for _ in range(_ITERATIONS):
-        cross_count = minimized_cross_count(columns, forward_items, backward_items)
+        cross_count = minimized_cross_count(columns, forward_items, backward_items, T)
         if cross_count < best_cross_count:
             best_cross_count = cross_count
             best_columns = [c.copy() for c in columns]
