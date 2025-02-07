@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
-from collections.abc import Iterable
+import ctypes
+import platform
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import cached_property
 from math import inf
-from typing import TYPE_CHECKING, Literal, TypeGuard, cast
+from typing import TYPE_CHECKING, Literal, TypeGuard
 
+import bpy
 from bpy.types import Node, NodeFrame, NodeSocket
-from mathutils.geometry import interpolate_bezier
 
 from ..utils import REROUTE_DIM, abs_loc, dimensions, get_bottom, get_top
 
@@ -151,16 +151,60 @@ class Cluster:
         return GType.CLUSTER
 
 
-_HIDDEN_NODE_FLAT_WIDTH = 116
-_BOTTOM_OFFSET = 14.85
-_TOP_OFFSET = 35
-_VISIBLE_PBSDF_SOCKETS = 5
-_PBSDF_PANELS = ('Subsurface', 'Specular', 'Transmission', 'Coat', 'Sheen', 'Emission')
-_SOCKET_SPACING_MULTIPLIER = 22
+class bNodeStack(ctypes.Structure):
+    vec: ctypes.c_float * 4
+    min: ctypes.c_float
+    max: ctypes.c_float
+    data: ctypes.c_void_p
+    hasinput: ctypes.c_short
+    hasoutput: ctypes.c_short
+    datatype: ctypes.c_short
+    sockettype: ctypes.c_short
+    is_copy: ctypes.c_short
+    external: ctypes.c_short
+    _pad: ctypes.c_char * 4
 
 
-def get_visible_sockets(sockets: Iterable[NodeSocket]) -> list[NodeSocket]:
-    return [s for s in sockets if not s.is_unavailable and not s.hide]
+class bNodeSocketRuntimeHandle(ctypes.Structure):
+    if platform.system() == 'Windows':
+        _pad0: ctypes.c_char * 8
+    declaration: ctypes.c_void_p
+    changed_flag: ctypes.c_uint32
+    total_inputs: ctypes.c_short
+    _pad1: ctypes.c_char * 2
+    location: ctypes.c_float * 2
+
+
+class bNodeSocket(ctypes.Structure):
+    next: ctypes.c_void_p
+    prev: ctypes.c_void_p
+    prop: ctypes.c_void_p
+    identifier: ctypes.c_char * 64
+    name: ctypes.c_char * 64
+    storage: ctypes.c_void_p
+    in_out: ctypes.c_short
+    typeinfo: ctypes.c_void_p
+    idname: ctypes.c_char * 64
+    default_value: ctypes.c_void_p
+    _pad: ctypes.c_char * 4
+    label: ctypes.c_char * 64
+    description: ctypes.c_char * 64
+    short_label: ctypes.c_char * 64
+    default_attribute_name: ctypes.POINTER(ctypes.c_char)
+    to_index: ctypes.c_int
+    link: ctypes.c_void_p
+    ns: bNodeStack
+    runtime: ctypes.POINTER(bNodeSocketRuntimeHandle)
+
+
+for cls in (bNodeStack, bNodeSocketRuntimeHandle, bNodeSocket):
+    cls._fields_ = [(k, eval(v)) for k, v in cls.__annotations__.items()]
+
+
+def get_socket_y(socket: NodeSocket) -> float:
+    b_socket = bNodeSocket.from_address(socket.as_pointer())
+    ui_scale = bpy.context.preferences.system.ui_scale  # type: ignore
+    return b_socket.runtime.contents.location[1] / ui_scale
 
 
 @dataclass(frozen=True)
@@ -184,64 +228,6 @@ class Socket:
         v = self.owner
         return v.x + v.width if self.is_output else v.x
 
-    def _get_hidden_socket_y(self) -> float:
-        v = self.owner
-        socket = cast(NodeSocket, self.bpy)
-        node = socket.node
-
-        cap_width = (v.width - _HIDDEN_NODE_FLAT_WIDTH) / 2
-        outer = cap_width / -3
-
-        raw_sockets = node.outputs if self.is_output else node.inputs
-        sockets = get_visible_sockets(raw_sockets)
-
-        bottom = v.y - v.height
-        coords = ((cap_width, v.y), (outer, v.y), (cap_width, bottom), (outer, bottom))
-        points = interpolate_bezier(*coords, len(sockets) + 2)[1:-1]
-
-        return points[sockets.index(socket)].y
-
-    def _get_input_y(self) -> float:
-        input = cast(NodeSocket, self.bpy)
-        node = input.node
-
-        if node.hide:
-            return self._get_hidden_socket_y()
-
-        v = self.owner
-        y = v.y
-
-        inputs = get_visible_sockets(node.inputs)
-        if node.bl_idname != 'ShaderNodeBsdfPrincipled':
-            # Start from the bottom socket to avoid any node properties
-            y -= v.height - _BOTTOM_OFFSET
-            inputs.reverse()
-            idx = inputs.index(input)
-
-            for i in inputs[:idx + 1]:
-                is_multi_value = i.type in {'VECTOR', 'ROTATION', 'MATRIX'}
-                if is_multi_value and not i.hide_value and not i.is_linked:
-                    y += _SOCKET_SPACING_MULTIPLIER * 0.909 * len(i.default_value)  # type: ignore
-        else:
-            y -= 56.5
-            idx = inputs.index(input)
-            if idx > _VISIBLE_PBSDF_SOCKETS:
-                idx = _VISIBLE_PBSDF_SOCKETS + 0.5 + _PBSDF_PANELS.index(input.name.split()[0])
-            idx = -idx
-
-        return y + idx * _SOCKET_SPACING_MULTIPLIER
-
-    def _get_output_y(self) -> float:
-        output = cast(NodeSocket, self.bpy)
-        node = output.node
-
-        if node.hide:
-            return self._get_hidden_socket_y()
-
-        y = self.owner.y - _TOP_OFFSET
-        outputs = get_visible_sockets(node.outputs)
-        return y - outputs.index(output) * _SOCKET_SPACING_MULTIPLIER
-
     @cached_property
     def _offset_y(self) -> float:
         v = self.owner
@@ -249,8 +235,8 @@ class Socket:
         if v.is_reroute or not is_real(v):
             return 0
 
-        socket_y = self._get_output_y() if self.is_output else self._get_input_y()
-        return socket_y - v.y
+        assert self.bpy
+        return get_socket_y(self.bpy) - get_top(v.node)
 
     @property
     def y(self) -> float:
