@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 import networkx as nx
 
 from ... import config
-from ..graph import GNode, GType, Socket
+from ..graph import Cluster, GNode, GType, Socket
 
 if TYPE_CHECKING:
     from ..sugiyama import ClusterGraph
@@ -58,14 +58,52 @@ class _Mode(Enum):
     RUBBER = auto()
 
 
-def get_linear_segments(CG: ClusterGraph) -> list[Segment]:
+def reroute_succ(G: nx.DiGraph[GNode], u: GNode) -> GNode | None:
+    if not u.is_reroute:
+        return None
+
+    reroute_successors = [v for v in G[u] if v.is_reroute]
+    return reroute_successors[0] if len(reroute_successors) == 1 else None
+
+
+def linear_succ(G: nx.DiGraph[GNode], u: GNode) -> GNode | None:
+    return next(iter(G[u]), None) if G.out_degree[u] < 2 else reroute_succ(G, u)
+
+
+@cache
+def complex_clusters(CG: ClusterGraph) -> set[Cluster]:
     G = CG.G
     T = CG.T
-
-    complex_clusters = set()
+    clusters = set()
     for c in CG.S:
         if any(G.in_degree[v] > 1 or G.out_degree[v] > 1 for v in T[c] if v.type != GType.CLUSTER):
-            complex_clusters.add(c)
+            clusters.add(c)
+
+    return clusters
+
+
+def clusters_are_incompatible(CG: ClusterGraph, c1: Cluster, c2: Cluster) -> bool:
+    if c1 == c2:
+        return False
+
+    cu, cv = sorted((c1, c2), key=lambda c: c.nesting_level)  # type: ignore
+    if nx.has_path(CG.T, cu, cv):
+        return cv in complex_clusters(CG)
+
+    return bool({c1, c2} & complex_clusters(CG))
+
+
+def get_linear_segments(CG: ClusterGraph) -> list[Segment]:
+    G = CG.G
+
+    def linear_succ_iter(u: GNode) -> Iterator[GNode]:
+        v = linear_succ(G, u)
+
+        if not v or G.in_degree[v] > 1:
+            return
+
+        if G.out_degree[u] < 2 or reroute_succ(G, u):
+            yield v
 
     linear_segments = []
     seen = set()
@@ -74,38 +112,20 @@ def get_linear_segments(CG: ClusterGraph) -> list[Segment]:
             if u in seen:
                 continue
 
-            if G.out_degree[u] > 1:
-                linear_segments.append(Segment([u]))
-                continue
-
-            succ = nx.dfs_preorder_nodes(G, u)
-            nodes = [next(succ)]
-            for v in succ:
-                if G.in_degree[v] > 1 or G.out_degree[v] > 1:
-                    break
-
-                c1 = u.cluster
-                c2 = v.cluster
-                if c1 != c2:
-                    cu, cv = sorted((c1, c2), key=lambda c: c.nesting_level)
-                    if nx.has_path(T, cu, cv):
-                        if cv in complex_clusters:
-                            break
-                    elif {c1, c2} & complex_clusters:
+            nodes = [u]
+            if linear_succ(G, u):
+                for _, v in nx.generic_bfs_edges(G, u, linear_succ_iter):  # type: ignore
+                    if clusters_are_incompatible(CG, u.cluster, v.cluster):  # type: ignore
                         break
+                    nodes.append(v)
 
-                nodes.append(v)
-
-            seen.update(nodes)
             linear_segments.append(Segment(nodes))
+            seen.update(nodes)
 
     return linear_segments
 
 
-def prevent_cycles(
-  linear_segments: list[Segment],
-  columns: Sequence[Sequence[GNode]],
-) -> None:
+def prevent_cycles(linear_segments: list[Segment], columns: Sequence[Sequence[GNode]]) -> None:
     for col1, col2 in pairwise(reversed(columns)):
         for i, v in enumerate(col1):
             segments2 = [w.segment for w in col2]
