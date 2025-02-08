@@ -437,7 +437,7 @@ def align_reroutes_with_sockets(G: nx.DiGraph[GNode]) -> None:
 _EDGE_SPACE_REDUCTION = 63
 
 
-def assign_x_coords(G: nx.DiGraph[GNode]) -> None:
+def assign_x_coords(G: nx.DiGraph[GNode], T: nx.DiGraph[GNode | Cluster]) -> None:
     columns: list[list[GNode]] = G.graph['columns']
     x = 0
     edge_space_fac = config.MARGIN.x / (_EDGE_SPACE_REDUCTION * 10)
@@ -456,8 +456,23 @@ def assign_x_coords(G: nx.DiGraph[GNode]) -> None:
         if col == columns[-1]:
             continue
 
-        if {v.cluster for v in col} ^ {v.cluster for v in columns[i + 1]}:
-            x += _FRAME_PADDING
+        clusters1 = {cast(Cluster, v.cluster) for v in col}
+        clusters2 = {cast(Cluster, v.cluster) for v in columns[i + 1]}
+
+        if not clusters1 ^ clusters2:
+            continue
+
+        ST1 = T.subgraph(chain(clusters1, *[nx.ancestors(T, c) for c in clusters1])).copy()
+        ST2 = T.subgraph(chain(clusters2, *[nx.ancestors(T, c) for c in clusters2])).copy()
+
+        for *e, d in ST1.edges(data=True):
+            d['weight'] = int(e not in ST2.edges)  # type: ignore
+
+        for *e, d in ST2.edges(data=True):
+            d['weight'] = int(e not in ST1.edges)  # type: ignore
+
+        dist = nx.dag_longest_path_length(ST1) + nx.dag_longest_path_length(ST2)  # type: ignore
+        x += _FRAME_PADDING * dist
 
 
 def is_unnecessary_bend_point(socket: Socket, other_socket: Socket) -> bool:
@@ -671,6 +686,7 @@ def sugiyama_layout(ntree: NodeTree) -> None:
     precompute_links(ntree)
     CG = ClusterGraph(get_multidigraph())
     G = CG.G
+    T = CG.T
 
     save_multi_input_orders(G)
     remove_reroutes(CG)
@@ -680,7 +696,7 @@ def sugiyama_layout(ntree: NodeTree) -> None:
     CG.insert_dummy_nodes()
 
     add_columns(G)
-    minimize_crossings(G, CG.T)
+    minimize_crossings(G, T)
 
     if len(CG.S) == 1:
         bk_assign_y_coords(G)
@@ -690,8 +706,8 @@ def sugiyama_layout(ntree: NodeTree) -> None:
         CG.remove_nodes_from([v for v in G if v.type == GType.VERTICAL_BORDER])
 
     align_reroutes_with_sockets(G)
-    assign_x_coords(G)
-    route_edges(G, CG.T)
+    assign_x_coords(G, T)
+    route_edges(G, T)
 
     realize_dummy_nodes(CG)
     restore_multi_input_orders(G)
