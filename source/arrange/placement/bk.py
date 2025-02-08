@@ -10,6 +10,7 @@ from collections.abc import Collection, Hashable
 from itertools import chain, pairwise
 from math import ceil, floor, inf
 from statistics import fmean
+from typing import cast
 
 import networkx as nx
 
@@ -94,7 +95,7 @@ def min_separation(u: GNode, v: GNode, is_up: bool) -> float:
 
 
 def place_block(v: GNode, is_up: bool) -> None:
-    if v.y is not None:
+    if cast(float | None, v.y) is not None:
         return
 
     v.y = 0
