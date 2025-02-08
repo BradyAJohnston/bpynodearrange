@@ -92,7 +92,7 @@ def batch_modify(bl_data: Iterable[bpy.types.ID], cls: Type[Operator], *, redraw
             node.select = True
 
         if redraw_ui:
-            bpy.ops.wm.redraw_timer(type='DRAW_WIN', iterations=1)
+            bpy.ops.wm.redraw_timer(type='DRAW', iterations=0)
 
         op()
         count += 1
