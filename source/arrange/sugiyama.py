@@ -403,6 +403,7 @@ def align_reroutes_with_sockets(G: nx.DiGraph[GNode]) -> None:
         for path, foreign_sockets in tuple(reroute_paths.items()):
             y = path[0].y
             foreign_sockets.sort(key=lambda s: abs(y - s.y))
+            foreign_sockets.sort(key=lambda s: y == s.owner.y, reverse=True)
 
             if not foreign_sockets or y - foreign_sockets[0].y == 0:
                 del reroute_paths[path]
