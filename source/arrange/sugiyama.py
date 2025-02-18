@@ -383,6 +383,7 @@ def add_columns(G: nx.DiGraph[GNode]) -> None:
     columns = [list(c) for c in group_by(G, key=lambda v: v.rank, sort=True)]
     G.graph['columns'] = columns
     for col in columns:
+        col.sort(key=lambda v: abs_loc(v.node).y if is_real(v) else 0, reverse=True)
         for v in col:
             v.col = col
 
