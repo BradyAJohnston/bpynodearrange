@@ -338,12 +338,12 @@ def minimized_cross_count(
             if i == 0:
                 fixed_col = columns[0] if is_forwards else columns[-1]
                 clusters = {c: j for j, v in enumerate(fixed_col) for c in nx.ancestors(T, v)}
-                key = clusters.get
+                key = cast(Callable[[Cluster], int], clusters.get)
             else:
                 key = get_barycenter
 
             for H in data:
-                H.constrained_clusters.sort(key=key)  # pyright: ignore[reportArgumentType]
+                H.constrained_clusters.sort(key=key)
                 calc_socket_ranks(H, is_forwards)
                 calc_barycenters(H)
                 fill_in_unknown_barycenters(H.reduced_free_col, is_first_sweep)
