@@ -364,7 +364,7 @@ def dissolve_reroute_edges(G: nx.DiGraph[GNode], path: list[GNode]) -> None:
 def remove_reroutes(CG: ClusterGraph) -> None:
     reroute_clusters = {#
       c for c in CG.S
-      if all(v.is_reroute for v in CG.T[c] if v.type != GType.CLUSTER)}
+      if all(v.type != GType.CLUSTER and v.is_reroute for v in CG.T[c])}
     for path in get_reroute_segments(CG):
         if path[0].cluster in reroute_clusters:
             if len(path) > 2:
