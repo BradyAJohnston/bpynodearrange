@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
 from itertools import chain, pairwise, product
 from statistics import fmean
 from typing import Any, cast
@@ -434,45 +434,50 @@ def align_reroutes_with_sockets(G: nx.DiGraph[GNode]) -> None:
                 break
 
 
-_EDGE_SPACE_REDUCTION = 63
+def frame_padding(
+  columns: Sequence[Collection[GNode]],
+  i: int,
+  T: nx.DiGraph[GNode | Cluster],
+) -> float:
+    col = columns[i]
+
+    if col == columns[-1]:
+        return 0
+
+    clusters1 = {cast(Cluster, v.cluster) for v in col}
+    clusters2 = {cast(Cluster, v.cluster) for v in columns[i + 1]}
+
+    if not clusters1 ^ clusters2:
+        return 0
+
+    ST1 = T.subgraph(chain(clusters1, *[nx.ancestors(T, c) for c in clusters1])).copy()
+    ST2 = T.subgraph(chain(clusters2, *[nx.ancestors(T, c) for c in clusters2])).copy()
+
+    for *e, d in ST1.edges(data=True):
+        d['weight'] = int(e not in ST2.edges)  # type: ignore
+
+    for *e, d in ST2.edges(data=True):
+        d['weight'] = int(e not in ST1.edges)  # type: ignore
+
+    dist = nx.dag_longest_path_length(ST1) + nx.dag_longest_path_length(ST2)  # type: ignore
+    return _FRAME_PADDING * dist
 
 
 def assign_x_coords(G: nx.DiGraph[GNode], T: nx.DiGraph[GNode | Cluster]) -> None:
     columns: list[list[GNode]] = G.graph['columns']
     x = 0
-    edge_space_fac = config.MARGIN.x / (_EDGE_SPACE_REDUCTION * 10)
     for i, col in enumerate(columns):
         max_width = max([v.width for v in col])
 
-        y_diffs = []
         for v in col:
             v.x = x if v.is_reroute else x - (v.width - max_width) / 2
-            y_diffs.extend([
-              abs(d['to_socket'].y - d['from_socket'].y) for *_, d in G.out_edges(v, data=True)])
 
-        max_y_diff = max(y_diffs, default=0)
-        x += max_width + edge_space_fac * max_y_diff + config.MARGIN.x
-
-        if col == columns[-1]:
-            continue
-
-        clusters1 = {cast(Cluster, v.cluster) for v in col}
-        clusters2 = {cast(Cluster, v.cluster) for v in columns[i + 1]}
-
-        if not clusters1 ^ clusters2:
-            continue
-
-        ST1 = T.subgraph(chain(clusters1, *[nx.ancestors(T, c) for c in clusters1])).copy()
-        ST2 = T.subgraph(chain(clusters2, *[nx.ancestors(T, c) for c in clusters2])).copy()
-
-        for *e, d in ST1.edges(data=True):
-            d['weight'] = int(e not in ST2.edges)  # type: ignore
-
-        for *e, d in ST2.edges(data=True):
-            d['weight'] = int(e not in ST1.edges)  # type: ignore
-
-        dist = nx.dag_longest_path_length(ST1) + nx.dag_longest_path_length(ST2)  # type: ignore
-        x += _FRAME_PADDING * dist
+        # https://doi.org/10.7155/jgaa.00220 (p. 139)
+        delta_i = sum([
+          1 for *_, d in G.out_edges(col, data=True)
+          if abs(d['to_socket'].y - d['from_socket'].y) >= config.MARGIN.x * 3])
+        spacing = (1 + min(delta_i / 4, 2)) * config.MARGIN.x
+        x += max_width + spacing + frame_padding(columns, i, T)
 
 
 def is_unnecessary_bend_point(socket: Socket, other_socket: Socket) -> bool:
