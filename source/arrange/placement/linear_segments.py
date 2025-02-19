@@ -239,9 +239,10 @@ def merge_regions(columns: Sequence[Sequence[GNode]]) -> None:
                     continue
 
                 assert v.cluster
-                if not v.cluster.node or v.cluster != w.cluster:
-                    if v.y + region1.deflection - v.height - config.MARGIN.y >= w.y + region2.deflection:
-                        continue
+                if ((not v.cluster.node or GType.VERTICAL_BORDER in {v.type, w.type})
+                      and v.y + region1.deflection - v.height - config.MARGIN.y
+                      >= w.y + region2.deflection):
+                    continue
 
                 region2.deflection = (
                   region2.weight * region2.deflection
