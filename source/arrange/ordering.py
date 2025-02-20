@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import random
 from collections import defaultdict
-from collections.abc import Collection, Iterator, Sequence
+from collections.abc import Callable, Collection, Iterator, Sequence
 from dataclasses import dataclass, field, replace
 from functools import cache
 from itertools import chain, pairwise
