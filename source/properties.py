@@ -33,7 +33,6 @@ class NA_PG_Settings(PropertyGroup):
          "Active Node",
          "Move selected nodes by the difference of the active node's location from (0, 0)")),
       name="Origin",
-      description="todo",
       default='CENTER',
       options=set())
     # yapf: enable
