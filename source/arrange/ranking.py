@@ -198,8 +198,8 @@ def exchange(
     compute_cut_values(H, T)
 
 
-def normalize_and_balance(H: nx.DiGraph[GNode], G: nx.DiGraph[GNode]) -> None:
-    for cc in nx.weakly_connected_components(G):
+def normalize_and_balance(CG: ClusterGraph, H: nx.DiGraph[GNode]) -> None:
+    for cc in nx.weakly_connected_components(CG.G):
         c = next(iter(cc)).cluster
         assert c
 
@@ -208,11 +208,10 @@ def normalize_and_balance(H: nx.DiGraph[GNode], G: nx.DiGraph[GNode]) -> None:
 
         ranked = group_by(cc, key=lambda v: v.rank, sort=True)
 
-        start = c.left.rank
         if c.node:
-            start += 1
+            start = min(v.rank for v in CG.T[c] if v.type != GType.CLUSTER)
         else:
-            start -= max(ranked.values()) - min(ranked.values())
+            start = c.left.rank - (max(ranked.values()) - min(ranked.values()))
 
         for i, col in enumerate(ranked, start):
             for v in col:
@@ -258,4 +257,4 @@ def compute_ranks(CG: ClusterGraph) -> None:
 
     root = next(c for c in CG.S if not CG.T.pred[c])
     H.remove_nodes_from((root.left, root.right))
-    normalize_and_balance(H, CG.G)
+    normalize_and_balance(CG, H)
