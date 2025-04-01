@@ -551,12 +551,12 @@ def route_edges(G: nx.MultiDiGraph[GNode], T: nx.DiGraph[GNode | Cluster]) -> No
     for v in chain(*G.graph['columns']):
         add_bend_points(G, v, bend_points)
 
-    edge_of = {v: e for e, d in bend_points.items() for v in d}
-    key = lambda v: (G.edges[edge_of[v]]['from_socket'], v.x, v.y)
+    edge_of = {b: e for e, d in bend_points.items() for b in d}
+    key = lambda b: (G.edges[edge_of[b]]['from_socket'], b.x, b.y)
     for (target, *redundant), (from_socket, *_) in group_by(edge_of, key=key).items():
-        for v in redundant:
-            dummy_nodes = bend_points[edge_of[v]]
-            dummy_nodes[dummy_nodes.index(v)] = target
+        for b in redundant:
+            dummy_nodes = bend_points[edge_of[b]]
+            dummy_nodes[dummy_nodes.index(b)] = target
 
         u = from_socket.owner
         if not u.is_reroute or G.out_degree[u] < 2:  # type: ignore
