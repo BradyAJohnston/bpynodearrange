@@ -238,8 +238,7 @@ def merge_regions(columns: Sequence[Sequence[GNode]]) -> None:
                 if weight_sum == 0 or region1 == region2:
                     continue
 
-                assert v.cluster
-                assert w.cluster
+                assert v.cluster and w.cluster
                 if (
                   not v.cluster.node or not w.cluster.node or
                   (v.cluster == w.cluster and GType.VERTICAL_BORDER in {v.type, w.type})
