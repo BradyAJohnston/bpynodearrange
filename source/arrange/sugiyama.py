@@ -97,7 +97,8 @@ def add_dummy_nodes_to_edge(
         return
 
     for pair in pairwise(dummy_nodes):
-        add_dummy_edge(G, *pair)
+        if pair not in G.edges:
+            add_dummy_edge(G, *pair)
 
     u, v, _ = edge
     d = G.edges[edge]  # type: ignore
