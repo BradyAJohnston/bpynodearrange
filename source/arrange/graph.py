@@ -245,3 +245,6 @@ class Socket:
 
 Edge = tuple[GNode, GNode]
 MultiEdge = tuple[GNode, GNode, int]
+
+FROM_SOCKET = 'from_socket'
+TO_SOCKET = 'to_socket'

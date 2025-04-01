@@ -15,7 +15,7 @@ from mathutils.geometry import intersect_line_line_2d
 
 from .. import config
 from ..utils import abs_loc, get_ntree, group_by, move
-from .graph import Cluster, Edge, GNode, GType, MultiEdge, Socket, is_real
+from .graph import Cluster, Edge, GNode, GType, MultiEdge, Socket, is_real, FROM_SOCKET, TO_SOCKET
 from .ordering import minimize_crossings
 from .placement.bk import bk_assign_y_coords
 from .placement.linear_segments import Segment, linear_segments_assign_y_coords
@@ -65,7 +65,7 @@ def get_nesting_relations(v: GNode | Cluster) -> Iterator[tuple[Cluster, GNode |
 def save_multi_input_orders(G: nx.MultiDiGraph[GNode]) -> None:
     links = {(l.from_socket, l.to_socket): l for l in get_ntree().links}
     for v, w, d in G.edges.data():
-        to_socket = d['to_socket']
+        to_socket = d[TO_SOCKET]
 
         if not to_socket.bpy.is_multi_input:
             continue
@@ -75,9 +75,9 @@ def save_multi_input_orders(G: nx.MultiDiGraph[GNode]) -> None:
                 break
 
         # If there's no non-reroute ancestor, the last edge is used.
-        base_from_socket = G.edges[u, z, 0]['from_socket']
+        base_from_socket = G.edges[u, z, 0][FROM_SOCKET]
 
-        link = links[(d['from_socket'].bpy, to_socket.bpy)]
+        link = links[(d[FROM_SOCKET].bpy, to_socket.bpy)]
         config.multi_input_sort_ids[to_socket][base_from_socket] = link.multi_input_sort_id
 
 
@@ -105,10 +105,10 @@ def add_dummy_nodes_to_edge(
 
     w = dummy_nodes[0]
     if w not in G[u]:
-        G.add_edge(u, w, from_socket=d['from_socket'], to_socket=Socket(w, 0, False))
+        G.add_edge(u, w, from_socket=d[FROM_SOCKET], to_socket=Socket(w, 0, False))
 
     z = dummy_nodes[-1]
-    G.add_edge(z, v, from_socket=Socket(z, 0, True), to_socket=d['to_socket'])
+    G.add_edge(z, v, from_socket=Socket(z, 0, True), to_socket=d[TO_SOCKET])
 
     G.remove_edge(*edge)
 
@@ -116,8 +116,8 @@ def add_dummy_nodes_to_edge(
         return
 
     links = get_ntree().links
-    if d['to_socket'].bpy.is_multi_input:
-        target_link = (d['from_socket'].bpy, d['to_socket'].bpy)
+    if d[TO_SOCKET].bpy.is_multi_input:
+        target_link = (d[FROM_SOCKET].bpy, d[TO_SOCKET].bpy)
         links.remove(next(l for l in links if (l.from_socket, l.to_socket) == target_link))
 
 
@@ -175,7 +175,7 @@ class ClusterGraph:
     def merge_edges(self) -> None:
         G = self.G
         T = self.T
-        groups = group_by(G.edges(keys=True), key=lambda e: G.edges[e]['from_socket'])
+        groups = group_by(G.edges(keys=True), key=lambda e: G.edges[e][FROM_SOCKET])
         edges: tuple[MultiEdge, ...]
         for edges, from_socket in groups.items():
             long_edges = [(u, v, k) for u, v, k in edges if v.rank - u.rank > 1]
@@ -343,16 +343,16 @@ def dissolve_reroute_edges(G: nx.DiGraph[GNode], path: list[GNode]) -> None:
         return
 
     try:
-        u, _, o = next(iter(G.in_edges(path[0], data='from_socket')))
+        u, _, o = next(iter(G.in_edges(path[0], data=FROM_SOCKET)))
     except StopIteration:
         return
 
-    succ_inputs = [e[2] for e in G.out_edges(path[-1], data='to_socket')]
+    succ_inputs = [e[2] for e in G.out_edges(path[-1], data=TO_SOCKET)]
 
     # Check if a reroute has been used to link the same output to the same multi-input multiple
     # times
     for *_, d in G.out_edges(u, data=True):
-        if d['from_socket'] == o and d['to_socket'] in succ_inputs:
+        if d[FROM_SOCKET] == o and d[TO_SOCKET] in succ_inputs:
             path.clear()
             return
 
@@ -396,8 +396,8 @@ def align_reroutes_with_sockets(G: nx.DiGraph[GNode]) -> None:
     reroute_paths: dict[tuple[GNode, ...], list[Socket]] = {}
     for path in get_reroute_paths(G):
         for subpath in group_by(path, key=lambda v: v.y):
-            inputs = G.in_edges(subpath[0], data='from_socket')
-            outputs = G.out_edges(subpath[-1], data='to_socket')
+            inputs = G.in_edges(subpath[0], data=FROM_SOCKET)
+            outputs = G.out_edges(subpath[-1], data=TO_SOCKET)
             reroute_paths[subpath] = [e[2] for e in (*inputs, *outputs)]
 
     while True:
@@ -477,7 +477,7 @@ def assign_x_coords(G: nx.DiGraph[GNode], T: nx.DiGraph[GNode | Cluster]) -> Non
         # https://doi.org/10.7155/jgaa.00220 (p. 139)
         delta_i = sum([
           1 for *_, d in G.out_edges(col, data=True)
-          if abs(d['to_socket'].y - d['from_socket'].y) >= config.MARGIN.x * 3])
+          if abs(d[TO_SOCKET].y - d[FROM_SOCKET].y) >= config.MARGIN.x * 3])
         spacing = (1 + min(delta_i / 4, 2)) * config.MARGIN.x
         x += max_width + spacing + frame_padding(columns, i, T)
 
@@ -527,7 +527,7 @@ def add_bend_points(
     d: dict[str, Socket]
     largest = max(v.col, key=lambda w: w.width)
     for u, w, k, d in *G.out_edges(v, data=True, keys=True), *G.in_edges(v, data=True, keys=True):
-        socket = d['from_socket'] if v == u else d['to_socket']
+        socket = d[FROM_SOCKET] if v == u else d[TO_SOCKET]
         bend_point = GNode(type=GType.DUMMY)
         bend_point.x = largest.x + largest.width if socket.is_output else largest.x
 
@@ -575,7 +575,7 @@ def route_edges(G: nx.MultiDiGraph[GNode], T: nx.DiGraph[GNode | Cluster]) -> No
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     edge_of = {b: e for e, d in bend_points.items() for b in d}
-    key = lambda b: (G.edges[edge_of[b]]['from_socket'], b.x, b.y)
+    key = lambda b: (G.edges[edge_of[b]][FROM_SOCKET], b.x, b.y)
     for (target, *redundant), (from_socket, *_) in group_by(edge_of, key=key).items():
         for b in redundant:
             dummy_nodes = bend_points[edge_of[b]]
@@ -586,25 +586,25 @@ def route_edges(G: nx.MultiDiGraph[GNode], T: nx.DiGraph[GNode | Cluster]) -> No
             continue
 
         for e in G.out_edges(u, keys=True):
-            if target not in bend_points[e] and G.edges[e]['to_socket'].y == target.y:
+            if target not in bend_points[e] and G.edges[e][TO_SOCKET].y == target.y:
                 bend_points[e].append(target)
 
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     for e, dummy_nodes in tuple(bend_points.items()):
         dummy_nodes.sort(key=lambda b: b.x)
-        from_socket = G.edges[e]['from_socket']
+        from_socket = G.edges[e][FROM_SOCKET]
         for e_ in G.out_edges(e[0], keys=True):
             d = G.edges[e_]
 
-            if d['from_socket'] != from_socket or e_ in bend_points:
+            if d[FROM_SOCKET] != from_socket or e_ in bend_points:
                 continue
 
-            if d['to_socket'].x <= dummy_nodes[-1].x:
+            if d[TO_SOCKET].x <= dummy_nodes[-1].x:
                 continue
 
             b = dummy_nodes[-1]
-            line = ((b.x, b.y), (d['to_socket'].x, d['to_socket'].y))
+            line = ((b.x, b.y), (d[TO_SOCKET].x, d[TO_SOCKET].y))
             if any(node_overlaps_edge(v, line) for v in e[1].col):
                 continue
 
@@ -631,10 +631,10 @@ def simplify_segment(CG: ClusterGraph, aligned: Sequence[GNode], path: list[GNod
     u, *between, v = aligned
     G = CG.G
 
-    if G.pred[u] and (s := next(iter(G.in_edges(u, data='from_socket')))[2]).y == u.y:
+    if G.pred[u] and (s := next(iter(G.in_edges(u, data=FROM_SOCKET)))[2]).y == u.y:
         G.add_edge(s.owner, v, from_socket=s, to_socket=Socket(v, 0, False))
         between.append(u)
-    elif G.out_degree[v] == 1 and v.y == (s := next(iter(G.out_edges(v, data='to_socket')))[2]).y:
+    elif G.out_degree[v] == 1 and v.y == (s := next(iter(G.out_edges(v, data=TO_SOCKET)))[2]).y:
         G.add_edge(u, s.owner, from_socket=Socket(u, 0, True), to_socket=s)
         between.append(v)
     elif between:
@@ -660,10 +660,10 @@ def realize_edges(G: nx.DiGraph[GNode], v: GNode) -> None:
     links = get_ntree().links
 
     if G.pred[v]:
-        pred_output = next(iter(G.in_edges(v, data='from_socket')))[2]
+        pred_output = next(iter(G.in_edges(v, data=FROM_SOCKET)))[2]
         links.new(pred_output.bpy, v.node.inputs[0])
 
-    for _, w, succ_input in G.out_edges(v, data='to_socket'):
+    for _, w, succ_input in G.out_edges(v, data=TO_SOCKET):
         if is_real(w):
             links.new(v.node.outputs[0], succ_input.bpy)
 
@@ -682,7 +682,7 @@ def realize_dummy_nodes(CG: ClusterGraph) -> None:
 
 def restore_multi_input_orders(G: nx.MultiDiGraph[GNode]) -> None:
     H: nx.DiGraph[Socket] = nx.DiGraph()
-    H.add_edges_from([(d['from_socket'], d['to_socket']) for *_, d in G.edges.data()])
+    H.add_edges_from([(d[FROM_SOCKET], d[TO_SOCKET]) for *_, d in G.edges.data()])
     for sockets in group_by(H, key=lambda s: s.owner):
         outputs = {s for s in sockets if s.is_output}
         H.add_edges_from(product(set(sockets) - outputs, outputs))

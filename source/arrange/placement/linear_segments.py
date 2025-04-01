@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 import networkx as nx
 
 from ... import config
-from ..graph import Cluster, GNode, GType, Socket
+from ..graph import FROM_SOCKET, TO_SOCKET, Cluster, GNode, GType, Socket
 
 if TYPE_CHECKING:
     from ..sugiyama import ClusterGraph
@@ -185,7 +185,7 @@ _THRESH_FAC = 20
 @cache
 def get_out_edges(G: nx.DiGraph[GNode], v: GNode) -> list[tuple[Socket, Socket]]:
     return [#
-      (d['from_socket'], d['to_socket'])
+      (d[FROM_SOCKET], d[TO_SOCKET])
       for _, w, d in G.out_edges.data(nbunch=v)
       if w.segment != v.segment]
 
@@ -193,7 +193,7 @@ def get_out_edges(G: nx.DiGraph[GNode], v: GNode) -> list[tuple[Socket, Socket]]
 @cache
 def get_in_edges(G: nx.DiGraph[GNode], v: GNode) -> list[tuple[Socket, Socket]]:
     return [#
-      (d['from_socket'], d['to_socket'])
+      (d[FROM_SOCKET], d[TO_SOCKET])
       for u, _, d in G.in_edges.data(nbunch=v)
       if u.segment != v.segment]
 

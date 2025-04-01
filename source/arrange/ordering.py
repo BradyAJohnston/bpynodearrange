@@ -19,7 +19,7 @@ from typing import TypeAlias, cast
 
 import networkx as nx
 
-from .graph import Cluster, GNode, GType, Socket
+from .graph import FROM_SOCKET, TO_SOCKET, Cluster, GNode, GType, Socket
 
 # -------------------------------------------------------------------
 
@@ -75,8 +75,8 @@ def get_crossing_reduction_graph(
     for s, t, k, d in G.in_edges(TC[h], data=True, keys=True):  # type: ignore
         c = next(c for c in TC.pred[t] if c in LT[h])
 
-        input_k = 'to_socket'
-        output_k = 'from_socket'
+        input_k = TO_SOCKET
+        output_k = FROM_SOCKET
         if d[output_k].owner != s:
             input_k, output_k = output_k, input_k
 
@@ -92,7 +92,7 @@ def get_crossing_reduction_graph(
 
 def add_bipartite_edges(H: _ClusterCrossingsData) -> None:
     B = nx.DiGraph()
-    edges = [(d['from_socket'], d['to_socket'], d) for *_, d in H.graph.edges.data()]
+    edges = [(d[FROM_SOCKET], d[TO_SOCKET], d) for *_, d in H.graph.edges.data()]
     B.add_edges_from(edges)
 
     if B.edges:
@@ -121,11 +121,11 @@ def crossing_reduction_data(
 
             u: GNode
             for u in chain(*[G_h.pred[v] for v in LT[h]]):  # pyright: ignore[reportAssignmentType]
-                sockets = {e[2] for e in G_h.out_edges(u, data='from_socket')}
+                sockets = {e[2] for e in G_h.out_edges(u, data=FROM_SOCKET)}
                 H.fixed_sockets[u] = sorted(sockets, key=lambda d: d.idx, reverse=not backwards)
 
             for v in LT[h]:
-                H.free_sockets[v] = [e[2] for e in G_h.in_edges(v, data='from_socket')]
+                H.free_sockets[v] = [e[2] for e in G_h.in_edges(v, data=FROM_SOCKET)]
 
             H.constrained_clusters.extend([v for v in H.reduced_free_col if v in prev_clusters])
             add_bipartite_edges(H)
