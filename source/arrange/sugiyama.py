@@ -546,10 +546,33 @@ def add_bend_points(
         bend_points[u, w, k].append(bend_point)
 
 
+def node_overlaps_edge(
+  v: GNode,
+  edge_line: tuple[tuple[float, float], tuple[float, float]],
+) -> bool:
+    if v.is_reroute:
+        return False
+
+    top_line = ((v.x, v.y), (v.x + v.width, v.y))
+    if intersect_line_line_2d(*edge_line, *top_line):
+        return True
+
+    bottom_line = (
+      (v.x, v.y - v.height),
+      (v.x + v.width, v.y - v.height),
+    )
+    if intersect_line_line_2d(*edge_line, *bottom_line):
+        return True
+
+    return False
+
+
 def route_edges(G: nx.MultiDiGraph[GNode], T: nx.DiGraph[GNode | Cluster]) -> None:
     bend_points = defaultdict(list)
     for v in chain(*G.graph['columns']):
         add_bend_points(G, v, bend_points)
+
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     edge_of = {b: e for e, d in bend_points.items() for b in d}
     key = lambda b: (G.edges[edge_of[b]]['from_socket'], b.x, b.y)
@@ -563,12 +586,34 @@ def route_edges(G: nx.MultiDiGraph[GNode], T: nx.DiGraph[GNode | Cluster]) -> No
             continue
 
         for e in G.out_edges(u, keys=True):
-            if target not in bend_points[e]:
+            if target not in bend_points[e] and G.edges[e]['to_socket'].y == target.y:
                 bend_points[e].append(target)
+
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    for e, dummy_nodes in tuple(bend_points.items()):
+        dummy_nodes.sort(key=lambda b: b.x)
+        from_socket = G.edges[e]['from_socket']
+        for e_ in G.out_edges(e[0], keys=True):
+            d = G.edges[e_]
+
+            if d['from_socket'] != from_socket or e_ in bend_points:
+                continue
+
+            if d['to_socket'].x <= dummy_nodes[-1].x:
+                continue
+
+            b = dummy_nodes[-1]
+            line = ((b.x, b.y), (d['to_socket'].x, d['to_socket'].y))
+            if any(node_overlaps_edge(v, line) for v in e[1].col):
+                continue
+
+            bend_points[e_] = dummy_nodes
+
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     lca = lowest_common_cluster(T, bend_points)
     for (u, v, k), dummy_nodes in bend_points.items():
-        dummy_nodes.sort(key=lambda v: v.x)
         add_dummy_nodes_to_edge(G, (u, v, k), dummy_nodes)
 
         c = lca.get((u, v), u.cluster)
