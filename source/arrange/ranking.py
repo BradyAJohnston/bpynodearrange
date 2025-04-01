@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import networkx as nx
 
 from ..utils import group_by
-from .graph import GNode, GType
+from .graph import GNode, GType, MultiEdge
 
 if TYPE_CHECKING:
     from .sugiyama import ClusterGraph
@@ -30,20 +30,17 @@ def get_nesting_graph(CG: ClusterGraph) -> nx.MultiDiGraph[GNode]:
     return H
 
 
-_Edge = tuple[GNode, GNode, int]
-
-
 @cache
-def get_adj_edges_H(H: nx.MultiDiGraph[GNode], v: GNode) -> tuple[_Edge, ...]:
+def get_adj_edges_H(H: nx.MultiDiGraph[GNode], v: GNode) -> tuple[MultiEdge, ...]:
     return (*H.in_edges(v, keys=True), *H.out_edges(v, keys=True))
 
 
 @cache
-def get_adj_edges_T(T: nx.MultiDiGraph[GNode], v: GNode) -> tuple[_Edge, ...]:
+def get_adj_edges_T(T: nx.MultiDiGraph[GNode], v: GNode) -> tuple[MultiEdge, ...]:
     return (*T.in_edges(v, keys=True), *T.out_edges(v, keys=True))
 
 
-def get_slack(e: _Edge) -> int:
+def get_slack(e: MultiEdge) -> int:
     u, v, _ = e
     min_length = 1
     return v.rank - u.rank - min_length
@@ -53,7 +50,7 @@ def tight_tree(
   H: nx.MultiDiGraph[GNode],
   T: nx.MultiDiGraph[GNode],
   v: GNode,
-  visited: set[_Edge] | None = None,
+  visited: set[MultiEdge] | None = None,
 ) -> int:
     if visited is None:
         visited = set()
@@ -157,11 +154,11 @@ def feasible_tree(H: nx.MultiDiGraph[GNode]) -> nx.MultiDiGraph[GNode]:
     return T
 
 
-def leave_edge(T: nx.MultiDiGraph[GNode]) -> _Edge | None:
+def leave_edge(T: nx.MultiDiGraph[GNode]) -> MultiEdge | None:
     return next(((u, v, k) for u, v, k, c in T.edges.data('cut_value', keys=True) if c < 0), None)
 
 
-def is_in_head(v: GNode, e: _Edge) -> bool:
+def is_in_head(v: GNode, e: MultiEdge) -> bool:
     u, w, _ = e
 
     if u.lowest_po_num <= v.po_num and v.po_num <= u.po_num and w.lowest_po_num <= v.po_num and v.po_num <= w.po_num:
@@ -170,7 +167,7 @@ def is_in_head(v: GNode, e: _Edge) -> bool:
     return u.po_num < w.po_num
 
 
-def enter_edge(H: nx.MultiDiGraph[GNode], e: _Edge) -> _Edge:
+def enter_edge(H: nx.MultiDiGraph[GNode], e: MultiEdge) -> MultiEdge:
     edges = [f for f in H.edges(keys=True) if is_in_head(f[0], e) and not is_in_head(f[1], e)]
     return min(edges, key=get_slack)
 
@@ -178,8 +175,8 @@ def enter_edge(H: nx.MultiDiGraph[GNode], e: _Edge) -> _Edge:
 def exchange(
   H: nx.MultiDiGraph[GNode],
   T: nx.MultiDiGraph[GNode],
-  leave: _Edge,
-  enter: _Edge,
+  leave: MultiEdge,
+  enter: MultiEdge,
 ) -> None:
     T.remove_edge(*leave)
     T.add_edge(*enter)

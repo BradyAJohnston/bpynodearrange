@@ -241,3 +241,7 @@ class Socket:
     @property
     def y(self) -> float:
         return self.owner.y + self._offset_y
+
+
+Edge = tuple[GNode, GNode]
+MultiEdge = tuple[GNode, GNode, int]

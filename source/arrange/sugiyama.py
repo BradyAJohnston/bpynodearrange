@@ -15,7 +15,7 @@ from mathutils.geometry import intersect_line_line_2d
 
 from .. import config
 from ..utils import abs_loc, get_ntree, group_by, move
-from .graph import Cluster, GNode, GType, Socket, is_real
+from .graph import Cluster, Edge, GNode, GType, MultiEdge, Socket, is_real
 from .ordering import minimize_crossings
 from .placement.bk import bk_assign_y_coords
 from .placement.linear_segments import Segment, linear_segments_assign_y_coords
@@ -90,7 +90,7 @@ def add_dummy_edge(G: nx.DiGraph[GNode], u: GNode, v: GNode) -> None:
 
 def add_dummy_nodes_to_edge(
   G: nx.MultiDiGraph[GNode],
-  edge: tuple[GNode, GNode, int],
+  edge: MultiEdge,
   dummy_nodes: Sequence[GNode],
 ) -> None:
     if not dummy_nodes:
@@ -129,7 +129,7 @@ _FRAME_PADDING = 29.8
 def lowest_common_cluster(
   T: nx.DiGraph[GNode | Cluster],
   edges: Iterable[tuple[GNode, GNode, Any]],
-) -> dict[tuple[GNode, GNode], Cluster]:
+) -> dict[Edge, Cluster]:
     pairs = {(u, v) for u, v, _ in edges if u.cluster != v.cluster}
     return dict(nx.tree_all_pairs_lowest_common_ancestor(T, pairs=pairs))
 
@@ -176,7 +176,7 @@ class ClusterGraph:
         G = self.G
         T = self.T
         groups = group_by(G.edges(keys=True), key=lambda e: G.edges[e]['from_socket'])
-        edges: tuple[tuple[GNode, GNode, int], ...]
+        edges: tuple[MultiEdge, ...]
         for edges, from_socket in groups.items():
             long_edges = [(u, v, k) for u, v, k in edges if v.rank - u.rank > 1]
 
@@ -522,7 +522,7 @@ _MIN_Y_DIFF = 15
 def add_bend_points(
   G: nx.MultiDiGraph[GNode],
   v: GNode,
-  bend_points: defaultdict[tuple[GNode, GNode, int], list[GNode]],
+  bend_points: defaultdict[MultiEdge, list[GNode]],
 ) -> None:
     d: dict[str, Socket]
     largest = max(v.col, key=lambda w: w.width)
