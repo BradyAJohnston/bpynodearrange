@@ -138,7 +138,6 @@ def crossing_reduction_data(
 # -------------------------------------------------------------------
 
 _FreeColumns = list[tuple[list[GNode], _MixedGraph, list[_ClusterCrossingsData]]]
-_RANDOM_AMOUNT = 0.07
 
 
 def calc_socket_ranks(H: _ClusterCrossingsData, is_forwards: bool) -> None:
@@ -161,7 +160,8 @@ def calc_barycenters(H: _ClusterCrossingsData) -> None:
             continue
 
         weight = sum([s.owner.cr.socket_ranks[s] for s in sockets])
-        weight += random.uniform(0, 1) * _RANDOM_AMOUNT - _RANDOM_AMOUNT / 2
+        random_amount = random.uniform(-1, 1)
+        weight += random.uniform(0, 1) * random_amount - random_amount / 2
         w.cr.barycenter = weight / len(sockets)
 
 
