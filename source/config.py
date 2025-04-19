@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 selected: list[Node] = []
 linked_sockets: defaultdict[NodeSocket, set[NodeSocket]] = defaultdict(set)
-multi_input_sort_ids: defaultdict[Socket, dict[Socket, int]] = defaultdict(dict)
+multi_input_sort_ids: defaultdict[Socket, list[tuple[Socket, int]]] = defaultdict(list)
 
 SETTINGS: NA_PG_Settings
 MARGIN: Vector
