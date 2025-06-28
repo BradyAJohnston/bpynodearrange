@@ -7,13 +7,15 @@ import platform
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import cached_property
+from itertools import product
 from math import inf
 from typing import TYPE_CHECKING, Literal, TypeGuard
 
 import bpy
+import networkx as nx
 from bpy.types import Node, NodeFrame, NodeSocket
 
-from ..utils import REROUTE_DIM, abs_loc, dimensions, get_bottom, get_top
+from ..utils import REROUTE_DIM, abs_loc, dimensions, get_bottom, get_top, group_by
 
 if TYPE_CHECKING:
     from .placement.linear_segments import Segment
@@ -248,3 +250,13 @@ MultiEdge = tuple[GNode, GNode, int]
 
 FROM_SOCKET = 'from_socket'
 TO_SOCKET = 'to_socket'
+
+
+def socket_graph(G: nx.MultiDiGraph[GNode]) -> nx.DiGraph[Socket]:
+    H = nx.DiGraph()
+    H.add_edges_from([(d[FROM_SOCKET], d[TO_SOCKET]) for *_, d in G.edges.data()])
+    for sockets in group_by(H, key=lambda s: s.owner):
+        outputs = {s for s in sockets if s.is_output}
+        H.add_edges_from(product(set(sockets) - outputs, outputs))
+
+    return H

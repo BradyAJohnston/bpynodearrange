@@ -15,7 +15,18 @@ from mathutils.geometry import intersect_line_line_2d
 
 from .. import config
 from ..utils import abs_loc, get_ntree, group_by, move
-from .graph import Cluster, Edge, GNode, GType, MultiEdge, Socket, is_real, FROM_SOCKET, TO_SOCKET
+from .graph import (
+  FROM_SOCKET,
+  TO_SOCKET,
+  Cluster,
+  Edge,
+  GNode,
+  GType,
+  MultiEdge,
+  Socket,
+  is_real,
+  socket_graph,
+)
 from .ordering import minimize_crossings
 from .placement.bk import bk_assign_y_coords
 from .placement.linear_segments import Segment, linear_segments_assign_y_coords
@@ -683,13 +694,8 @@ def realize_dummy_nodes(CG: ClusterGraph) -> None:
 
 
 def restore_multi_input_orders(G: nx.MultiDiGraph[GNode]) -> None:
-    H: nx.DiGraph[Socket] = nx.DiGraph()
-    H.add_edges_from([(d[FROM_SOCKET], d[TO_SOCKET]) for *_, d in G.edges.data()])
-    for sockets in group_by(H, key=lambda s: s.owner):
-        outputs = {s for s in sockets if s.is_output}
-        H.add_edges_from(product(set(sockets) - outputs, outputs))
-
     links = get_ntree().links
+    H = socket_graph(G)
     for socket, sort_ids in config.multi_input_sort_ids.items():
         multi_input = socket.bpy
         assert multi_input

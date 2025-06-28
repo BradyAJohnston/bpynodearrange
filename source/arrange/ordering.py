@@ -19,7 +19,8 @@ from typing import TypeAlias, cast
 
 import networkx as nx
 
-from .graph import FROM_SOCKET, TO_SOCKET, Cluster, GNode, GType, Socket
+from .. import config
+from .graph import FROM_SOCKET, TO_SOCKET, Cluster, GNode, GType, Socket, socket_graph
 
 # -------------------------------------------------------------------
 
@@ -38,6 +39,21 @@ def get_col_nesting_trees(
         trees.append(LT)
 
     return trees
+
+
+def expand_multi_inputs(G: nx.MultiDiGraph[GNode]) -> None:
+    H = socket_graph(G)
+    for socket, sort_ids in config.multi_input_sort_ids.items():
+        SH = H.subgraph({i[0] for i in sort_ids} | {socket} | {v for v in H if v.owner.is_reroute})
+        seen = set()
+        for base_from_socket, sort_id in sort_ids:
+            from_socket = next(
+              s for s, t in nx.edge_dfs(SH, base_from_socket) if t == socket and s not in seen)
+            seen.add(from_socket)
+            for d in G[from_socket.owner][socket.owner].values():
+                if d[TO_SOCKET] == socket and d[FROM_SOCKET] == from_socket:
+                    d[TO_SOCKET] = Socket(socket.owner, -sort_id, False)
+                    break
 
 
 @cache
@@ -372,12 +388,15 @@ _ITERATIONS = 15
 def minimize_crossings(G: nx.MultiDiGraph[GNode], T: _MixedGraph) -> None:
     columns = G.graph['columns']
     trees = get_col_nesting_trees(columns, T)
+    G_ = G.copy()
 
-    forward_data = crossing_reduction_data(G, trees)
+    expand_multi_inputs(G_)
+
+    forward_data = crossing_reduction_data(G_, trees)
     forward_items = list(zip(columns[1:], trees[1:], forward_data))
 
     trees.reverse()
-    backward_data = crossing_reduction_data(nx.reverse_view(G), trees, True)  # type: ignore
+    backward_data = crossing_reduction_data(nx.reverse_view(G_), trees, True)  # type: ignore
     backward_items = list(zip(columns[-2::-1], trees[1:], backward_data))
 
     # -------------------------------------------------------------------
