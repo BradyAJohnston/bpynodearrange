@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 from collections.abc import Callable, Hashable, Iterable
+from functools import cache
 from operator import itemgetter
 from typing import TypeVar
 
@@ -71,6 +72,14 @@ def get_bottom(node: Node, y_loc: float | None = None) -> float:
     dim_y = dimensions(node).y
     bottom = y_loc - dim_y
     return bottom + dim_y / 2 - _HIDE_OFFSET if node.hide else bottom
+
+
+@cache
+def frame_padding() -> float:
+    assert bpy.context
+    prefs = bpy.context.preferences.system
+    widget_unit = int(18 * prefs.ui_scale) + (2 * prefs.pixel_size)
+    return 1.5 * widget_unit / prefs.ui_scale
 
 
 _MAX_LOC = 100_000

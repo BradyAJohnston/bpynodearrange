@@ -14,7 +14,7 @@ from mathutils import Vector
 from mathutils.geometry import intersect_line_line_2d
 
 from .. import config
-from ..utils import abs_loc, get_ntree, group_by, move
+from ..utils import abs_loc, frame_padding, get_ntree, group_by, move
 from .graph import (
   FROM_SOCKET,
   TO_SOCKET,
@@ -135,8 +135,6 @@ def add_dummy_nodes_to_edge(
 
 # -------------------------------------------------------------------
 
-_FRAME_PADDING = 29.8
-
 
 def lowest_common_cluster(
   T: nx.DiGraph[GNode | Cluster],
@@ -147,7 +145,7 @@ def lowest_common_cluster(
 
 
 def label_height(c: Cluster) -> float:
-    return -(_FRAME_PADDING / 2 - c.node.label_size * 1.25) if c.node and c.node.label else 0
+    return -(frame_padding() / 2 - c.node.label_size * 1.25) if c.node and c.node.label else 0
 
 
 # https://api.semanticscholar.org/CorpusID:14932050
@@ -449,7 +447,7 @@ def align_reroutes_with_sockets(G: nx.DiGraph[GNode]) -> None:
                 break
 
 
-def frame_padding(
+def frame_padding_of_col(
   columns: Sequence[Collection[GNode]],
   i: int,
   T: nx.DiGraph[GNode | Cluster],
@@ -475,7 +473,7 @@ def frame_padding(
         d['weight'] = int(e not in ST1.edges)  # type: ignore
 
     dist = nx.dag_longest_path_length(ST1) + nx.dag_longest_path_length(ST2)  # type: ignore
-    return _FRAME_PADDING * dist
+    return frame_padding() * dist
 
 
 def assign_x_coords(G: nx.DiGraph[GNode], T: nx.DiGraph[GNode | Cluster]) -> None:
@@ -492,7 +490,7 @@ def assign_x_coords(G: nx.DiGraph[GNode], T: nx.DiGraph[GNode | Cluster]) -> Non
           1 for *_, d in G.out_edges(col, data=True)
           if abs(d[TO_SOCKET].y - d[FROM_SOCKET].y) >= config.MARGIN.x * 3])
         spacing = (1 + min(delta_i / 4, 2)) * config.MARGIN.x
-        x += max_width + spacing + frame_padding(columns, i, T)
+        x += max_width + spacing + frame_padding_of_col(columns, i, T)
 
 
 def is_unnecessary_bend_point(socket: Socket, other_socket: Socket) -> bool:
@@ -517,11 +515,11 @@ def is_unnecessary_bend_point(socket: Socket, other_socket: Socket) -> bool:
 
     assert nbr.cluster
     if nbr.cluster.node and nbr.cluster != v.cluster:
-        nbr_x_offset += _FRAME_PADDING
+        nbr_x_offset += frame_padding()
         if is_above:
-            nbr_y -= _FRAME_PADDING
+            nbr_y -= frame_padding()
         else:
-            nbr_y += _FRAME_PADDING + label_height(nbr.cluster)
+            nbr_y += frame_padding() + label_height(nbr.cluster)
 
     line_a = ((nbr.x - nbr_x_offset, nbr_y), (nbr.x + nbr.width + nbr_x_offset, nbr_y))
     line_b = ((socket.x, socket.y), (other_socket.x, other_socket.y))
