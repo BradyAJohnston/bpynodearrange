@@ -284,12 +284,7 @@ def frame_padding_of_col(
     return frame_padding() * dist
 
 
-def assign_x_coords(
-  G: nx.DiGraph[GNode],
-  T: nx.DiGraph[GNode | Cluster],
-  *,
-  simple: bool = False,
-) -> None:
+def assign_x_coords(G: nx.DiGraph[GNode], T: nx.DiGraph[GNode | Cluster]) -> None:
     columns: list[list[GNode]] = G.graph['columns']
     x = 0
     for i, col in enumerate(columns):
@@ -298,17 +293,12 @@ def assign_x_coords(
         for v in col:
             v.x = x if v.is_reroute else x - (v.width - max_width) / 2
 
-        x += max_width
-
-        if simple:
-            x += config.MARGIN.x
-            continue
-
         # https://doi.org/10.7155/jgaa.00220 (p. 139)
         delta_i = sum([
           1 for *_, d in G.out_edges(col, data=True)
           if abs(d[TO_SOCKET].y - d[FROM_SOCKET].y) >= config.MARGIN.x * 3])
-        x += frame_padding_of_col(columns, i, T) + (1 + min(delta_i / 4, 2)) * config.MARGIN.x
+        spacing = (1 + min(delta_i / 4, 2)) * config.MARGIN.x
+        x += max_width + spacing + frame_padding_of_col(columns, i, T)
 
 
 def is_unnecessary_bend_point(socket: Socket, other_socket: Socket) -> bool:
@@ -576,7 +566,7 @@ def resize_unshrunken_frame(CG: ClusterGraph, cluster: Cluster) -> None:
     assert bpy.context
     ui_scale = bpy.context.preferences.system.ui_scale
 
-    target_top = max([v.y for v in contained]) + cluster.top_padding(CG)
+    target_top = max([v.y for v in contained]) + cluster.label_height()
     move(frame, y=target_top - (rct.ymax / ui_scale + frame.height))  # type: ignore
 
     target_left = min([v.x for v in contained]) - frame_padding()
@@ -619,7 +609,6 @@ def sugiyama_layout(ntree: NodeTree) -> None:
     if len(CG.S) == 1:
         bk_assign_y_coords(G)
     else:
-        assign_x_coords(G, T, simple=True)
         CG.add_vertical_border_nodes()
         linear_segments_assign_y_coords(CG)
         CG.remove_nodes_from([v for v in G if v.type == GType.VERTICAL_BORDER])

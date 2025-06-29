@@ -10,7 +10,6 @@ from itertools import chain, pairwise, product
 from math import inf
 from typing import TYPE_CHECKING, Any, Literal, Sequence, TypeGuard
 
-import blf
 import bpy
 import networkx as nx
 from bpy.types import Node, NodeFrame, NodeSocket
@@ -169,49 +168,6 @@ class Cluster:
             return -(frame_padding() / 2 - frame.label_size * 1.25)
         else:
             return 0
-
-    def text_height(self, frame_width: float) -> float:
-        frame = self.node
-        assert frame and frame.text and bpy.context
-
-        blf.size(0, frame.label_size)
-        blf.enable(0, blf.WORD_WRAP)
-        blf.word_wrap(0, int(frame_width - 2 * frame_padding()))
-
-        text_height = 0
-        for line in frame.text.lines:
-            text = line.body if line.body else '|'
-            text_height += blf.dimensions(0, text)[1]
-
-        blf.disable(0, blf.WORD_WRAP)
-
-        return text_height / bpy.context.preferences.system.ui_scale
-
-    def top_padding(self, CG: ClusterGraph) -> float:
-        frame = self.node
-
-        if not frame:
-            return 0
-
-        top_padding = 0
-
-        if frame.label:
-            top_padding += self.label_height()
-
-        if frame.text:
-            if frame.label:
-                top_padding += frame_padding()
-
-            contained = [
-              v for v in nx.descendants(CG.T, self)
-              if v.type != GType.CLUSTER and v.type != GType.VERTICAL_BORDER]
-            columns = CG.G.graph['columns']
-            subcolumns = tuple(group_by(contained, key=lambda v: columns.index(v.col), sort=True))
-            left = min([v.x for v in subcolumns[0]])
-            right = max([v.x + v.width for v in subcolumns[0]])
-            top_padding += self.text_height((right - left))
-
-        return top_padding
 
 
 # -------------------------------------------------------------------
@@ -386,7 +342,6 @@ class ClusterGraph:
                 continue
 
             nodes = [v for v in nx.descendants(T, c) if v.type != GType.CLUSTER]
-            top_padding = c.top_padding(self)
             lower_border_nodes = []
             upper_border_nodes = []
             for subcol in group_by(nodes, key=lambda v: columns.index(v.col), sort=True):
@@ -400,7 +355,7 @@ class ClusterGraph:
                 lower_border_nodes.append(lower_v)
 
                 upper_v = GNode(None, c, GType.VERTICAL_BORDER)
-                upper_v.height += top_padding
+                upper_v.height += c.label_height()
                 col.insert(min(indices), upper_v)
                 upper_v.col = col
                 T.add_edge(c, upper_v)
