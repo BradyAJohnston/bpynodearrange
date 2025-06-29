@@ -12,7 +12,7 @@ from mathutils import Vector
 
 from . import config
 from .arrange.sugiyama import sugiyama_layout
-from .utils import abs_loc, get_ntree, move
+from .utils import abs_loc, get_ntree
 
 
 class NodeOperator:
