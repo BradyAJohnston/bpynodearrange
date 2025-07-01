@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable, Collection, Iterator, Sequence
-from itertools import chain, product
+from itertools import chain
 from statistics import fmean
 from typing import cast
 
-import bpy
 import networkx as nx
 from bpy.types import Node, NodeFrame, NodeTree
 from mathutils import Vector
@@ -35,7 +34,6 @@ from .ordering import minimize_crossings
 from .placement.bk import bk_assign_y_coords
 from .placement.linear_segments import Segment, linear_segments_assign_y_coords
 from .ranking import compute_ranks
-from .structs import bNode, rctf
 
 # -------------------------------------------------------------------
 
@@ -544,37 +542,19 @@ def realize_locations(G: nx.DiGraph[GNode], old_center: Vector) -> None:
         v.node.parent = v.cluster.node
 
 
-def get_rct_of(frame: bpy.types.NodeFrame) -> rctf:
-    node_runtime = bNode.from_address(frame.as_pointer()).runtime.contents
-    return node_runtime.draw_bounds if bpy.app.version >= (4, 4, 0) else node_runtime.totr
-
-
 def resize_unshrunken_frame(CG: ClusterGraph, cluster: Cluster) -> None:
     frame = cluster.node
 
     if not frame or frame.shrink:
         return
 
-    T = CG.T
-    real_children = [v for v in T[cluster] if is_real(v)]
-    contained = [v for v in nx.descendants(T, cluster) if v.type != GType.CLUSTER]
+    real_children = [v for v in CG.T[cluster] if is_real(v)]
 
     for v in real_children:
         v.node.parent = None
 
-    rct = get_rct_of(frame)
-    assert bpy.context
-    ui_scale = bpy.context.preferences.system.ui_scale
-
-    target_top = max([v.y for v in contained]) + cluster.label_height()
-    move(frame, y=target_top - (rct.ymax / ui_scale + frame.height))  # type: ignore
-
-    target_left = min([v.x for v in contained]) - frame_padding()
-    move(frame, x=target_left - rct.xmax / ui_scale)  # type: ignore
-
-    # This automatically resizes the frame to its minimal bounding box
-    frame.width = 0
-    frame.height = 0
+    frame.shrink = False
+    frame.shrink = True
 
     for v in real_children:
         v.node.parent = frame
