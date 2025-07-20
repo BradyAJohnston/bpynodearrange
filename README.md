@@ -8,7 +8,7 @@ No matter the node tree complexity, nodes will be pleasingly arranged, organised
 Install
 ---
 
-Download from the [Blender Extensions Platform](https://extensions.blender.org/add-ons/datablock-utils/).
+Download from the [Blender Extensions Platform](https://extensions.blender.org/add-ons/node-arrange/).
 
 Location
 ---
