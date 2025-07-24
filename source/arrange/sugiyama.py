@@ -436,6 +436,7 @@ def route_edges(G: nx.MultiDiGraph[GNode], T: nx.DiGraph[GNode | Cluster]) -> No
         c = lca.get((u, v), u.cluster)
         for w in dummy_nodes:
             w.cluster = c
+            T.add_edge(c, w)
 
 
 # -------------------------------------------------------------------
