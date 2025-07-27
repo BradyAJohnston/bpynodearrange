@@ -32,7 +32,7 @@ from .graph import (
 )
 from .ordering import minimize_crossings
 from .placement.bk import bk_assign_y_coords
-from .placement.linear_segments import Segment, linear_segments_assign_y_coords
+from .placement.linear_segments import linear_segments_assign_y_coords
 from .ranking import compute_ranks
 
 # -------------------------------------------------------------------
@@ -99,12 +99,31 @@ def save_multi_input_orders(G: nx.MultiDiGraph[GNode]) -> None:
 # -------------------------------------------------------------------
 
 
-def get_reroute_paths(G: nx.DiGraph[GNode], function: Callable | None = None) -> list[list[GNode]]:
-    reroutes = [v for v in G if v.is_reroute and (not function or function(v))]
+def get_reroute_paths(
+  CG: ClusterGraph,
+  function: Callable | None = None,
+  *,
+  preserve_reroute_clusters: bool = True,
+  must_be_aligned: bool = False,
+) -> list[list[GNode]]:
+    G = CG.G
+    reroutes = {v for v in G if v.is_reroute and (not function or function(v))}
     SG = nx.DiGraph(G.subgraph(reroutes))
+
     for v in SG:
         if G.out_degree[v] > 1:
             SG.remove_edges_from(tuple(SG.out_edges(v)))
+
+    if preserve_reroute_clusters:
+        reroute_clusters = {#
+          c for c in CG.S
+          if all(v.is_reroute for v in CG.T[c] if v.type != GType.CLUSTER)}
+        SG.remove_edges_from([#
+          (u, v) for u, v in SG.edges
+          if u.cluster != v.cluster and {u.cluster, v.cluster} & reroute_clusters])
+
+    if must_be_aligned:
+        SG.remove_edges_from([(u, v) for u, v in SG.edges if u.y != v.y])
 
     indicies = {v: i for i, v in enumerate(nx.topological_sort(G)) if v in reroutes}
     paths = [sorted(c, key=lambda v: indicies[v]) for c in nx.weakly_connected_components(SG)]
@@ -128,31 +147,6 @@ def is_safe_to_remove(v: GNode) -> bool:
       config.linked_sockets[v.node.inputs[0]],
       config.linked_sockets[v.node.outputs[0]],
       ))
-
-
-def get_reroute_segments(CG: ClusterGraph) -> list[list[GNode]]:
-    reroute_paths = get_reroute_paths(CG.G, is_safe_to_remove)
-    order = tuple(chain(*reroute_paths))
-
-    reroute_clusters = {#
-      c for c in CG.S
-      if all(v.is_reroute for v in CG.T[c] if isinstance(v, GNode))}
-    reroute_segments = []
-    for segment in map(Segment, reroute_paths):
-        nodes = segment.nodes.copy()
-        for children, cluster in group_by(segment, key=lambda v: v.cluster).items():
-            if cluster not in reroute_clusters:
-                continue
-
-            s1 = segment.split(children[0])
-            reroute_segments.append(s1)
-            if children[-1] != nodes[-1]:
-                reroute_segments.append(s1.split(nodes[nodes.index(children[-1]) + 1]))
-
-        if segment.nodes:
-            reroute_segments.append(segment)
-
-    return sorted(map(list, reroute_segments), key=lambda s: order.index(s[0]))
 
 
 def dissolve_reroute_edges(G: nx.DiGraph[GNode], path: list[GNode]) -> None:
@@ -183,7 +177,7 @@ def remove_reroutes(CG: ClusterGraph) -> None:
     reroute_clusters = {#
       c for c in CG.S
       if all(v.type != GType.CLUSTER and v.is_reroute for v in CG.T[c])}
-    for path in get_reroute_segments(CG):
+    for path in get_reroute_paths(CG, is_safe_to_remove):
         if path[0].cluster in reroute_clusters:
             if len(path) > 2:
                 u, *between, v = path
@@ -209,13 +203,12 @@ def add_columns(G: nx.DiGraph[GNode]) -> None:
 # -------------------------------------------------------------------
 
 
-def align_reroutes_with_sockets(G: nx.DiGraph[GNode]) -> None:
+def align_reroutes_with_sockets(CG: ClusterGraph) -> None:
     reroute_paths: dict[tuple[GNode, ...], list[Socket]] = {}
-    for path in get_reroute_paths(G):
-        for subpath in group_by(path, key=lambda v: v.y):
-            inputs = G.in_edges(subpath[0], data=FROM_SOCKET)
-            outputs = G.out_edges(subpath[-1], data=TO_SOCKET)
-            reroute_paths[subpath] = [e[2] for e in (*inputs, *outputs)]
+    for path in get_reroute_paths(CG, preserve_reroute_clusters=False, must_be_aligned=True):
+        inputs = CG.G.in_edges(path[0], data=FROM_SOCKET)
+        outputs = CG.G.out_edges(path[-1], data=TO_SOCKET)
+        reroute_paths[tuple(path)] = [e[2] for e in (*inputs, *outputs)]
 
     while True:
         changed = False
@@ -594,7 +587,7 @@ def sugiyama_layout(ntree: NodeTree) -> None:
         linear_segments_assign_y_coords(CG)
         CG.remove_nodes_from([v for v in G if v.type == GType.VERTICAL_BORDER])
 
-    align_reroutes_with_sockets(G)
+    align_reroutes_with_sockets(CG)
     assign_x_coords(G, T)
     route_edges(G, T)
 
