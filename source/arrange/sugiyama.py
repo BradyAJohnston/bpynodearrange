@@ -435,7 +435,7 @@ def route_edges(G: nx.MultiDiGraph[GNode], T: nx.DiGraph[GNode | Cluster]) -> No
 # -------------------------------------------------------------------
 
 
-def simplify_segment(CG: ClusterGraph, path: list[GNode]) -> None:
+def simplify_path(CG: ClusterGraph, path: list[GNode]) -> None:
     if len(path) == 1:
         return
 
@@ -481,7 +481,7 @@ def realize_edges(G: nx.DiGraph[GNode], v: GNode) -> None:
 
 def realize_dummy_nodes(CG: ClusterGraph) -> None:
     for path in get_reroute_paths(CG, is_safe_to_remove, must_be_aligned=True):
-        simplify_segment(CG, path)
+        simplify_path(CG, path)
 
         for v in path:
             if not is_real(v):
