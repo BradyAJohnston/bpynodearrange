@@ -126,7 +126,7 @@ def add_bipartite_edges(H: _ClusterCrossingsData) -> None:
 def crossing_reduction_data(
   G: nx.MultiDiGraph[GNode],
   trees: Sequence[_MixedGraph],
-  backwards: bool = False,
+  is_backwards: bool = False,
 ) -> Iterator[list[_ClusterCrossingsData]]:
     for i, LT in enumerate(trees[1:], 1):
         prev_clusters = cast(set[Cluster], set(trees[i - 1]) - G.nodes)
@@ -138,7 +138,7 @@ def crossing_reduction_data(
             u: GNode
             for u in chain(*[G_h.pred[v] for v in LT[h]]):  # pyright: ignore[reportAssignmentType]
                 sockets = {e[2] for e in G_h.out_edges(u, data=FROM_SOCKET)}
-                H.fixed_sockets[u] = sorted(sockets, key=lambda d: d.idx, reverse=not backwards)
+                H.fixed_sockets[u] = sorted(sockets, key=lambda d: d.idx, reverse=not is_backwards)
 
             for v in LT[h]:
                 H.free_sockets[v] = [e[2] for e in G_h.in_edges(v, data=FROM_SOCKET)]
