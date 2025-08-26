@@ -34,8 +34,8 @@ def get_col_nesting_trees(
     trees = []
     for col in columns:
         LT = nx.DiGraph()
-        nodes = set(chain(col, *[nx.ancestors(T, v) for v in col]))
-        LT.add_edges_from([(u, v) for u in nodes for v in T[u] if v in nodes])
+        edges = nx.edge_bfs(T, col, orientation='reverse')
+        LT.add_edges_from([e[:2] for e in edges])
         trees.append(LT)
 
     return trees
