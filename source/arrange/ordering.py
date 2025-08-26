@@ -128,12 +128,13 @@ def crossing_reduction_data(
   trees: Sequence[_MixedGraph],
   is_backwards: bool = False,
 ) -> Iterator[list[_ClusterCrossingsData]]:
+    pos = lambda v: v.col.index(v) if v.type != GType.CLUSTER else inf
     for i, LT in enumerate(trees[1:], 1):
         prev_clusters = cast(set[Cluster], trees[i - 1].nodes - G.nodes)
         data = []
         for h in topologically_sorted_clusters(LT):
             G_h = crossing_reduction_graph(h, LT, G)
-            H = _ClusterCrossingsData(G_h, list(LT[h]))
+            H = _ClusterCrossingsData(G_h, sorted(LT[h], key=pos))
 
             u: GNode
             for u in chain(*[G_h.pred[v] for v in LT[h]]):  # pyright: ignore[reportAssignmentType]
