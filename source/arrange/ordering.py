@@ -15,6 +15,7 @@ from dataclasses import dataclass, field, replace
 from functools import cache
 from itertools import chain, pairwise
 from math import inf
+from operator import itemgetter
 from typing import TypeAlias, cast
 
 import networkx as nx
@@ -43,17 +44,30 @@ def get_col_nesting_trees(
 
 def expand_multi_inputs(G: nx.MultiDiGraph[GNode]) -> None:
     H = socket_graph(G)
-    for socket, sort_ids in config.multi_input_sort_ids.items():
-        SH = H.subgraph({i[0] for i in sort_ids} | {socket} | {v for v in H if v.owner.is_reroute})
-        seen = set()
-        for base_from_socket, sort_id in sort_ids:
-            from_socket = next(
-              s for s, t in nx.edge_dfs(SH, base_from_socket) if t == socket and s not in seen)
-            seen.add(from_socket)
-            for d in G[from_socket.owner][socket.owner].values():
-                if d[TO_SOCKET] == socket and d[FROM_SOCKET] == from_socket:
-                    d[TO_SOCKET] = Socket(socket.owner, -sort_id, False)
-                    break
+    reroutes = {v for v in H if v.owner.is_reroute}
+    for v in {s.owner for s in config.multi_input_sort_ids}:
+        inputs = sorted({e[2] for e in G.in_edges(v, data=TO_SOCKET)}, key=lambda s: s.idx)
+        i = inputs[0].idx
+        for socket in inputs:
+            if socket not in config.multi_input_sort_ids:
+                if i != socket.idx:
+                    d = next(d for *_, d in G.in_edges(v, data=True) if d[TO_SOCKET] == socket)
+                    d[TO_SOCKET] = replace(socket, idx=i)
+                i += 1
+                continue
+
+            sort_ids = config.multi_input_sort_ids[socket]
+            SH = H.subgraph({i[0] for i in sort_ids} | {socket} | reroutes)
+            seen = set()
+            for base_from_socket in sorted(sort_ids, key=itemgetter(1), reverse=True):
+                from_socket = next(
+                  s for s, t in nx.edge_dfs(SH, base_from_socket) if t == socket and s not in seen)
+                d = next(
+                  d for d in G[from_socket.owner][v].values()
+                  if d[TO_SOCKET] == socket and d[FROM_SOCKET] == from_socket)
+                d[TO_SOCKET] = replace(socket, idx=i)
+                seen.add(from_socket)
+                i += 1
 
 
 @cache
