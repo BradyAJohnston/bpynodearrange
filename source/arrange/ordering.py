@@ -80,7 +80,7 @@ class _ClusterCrossingsData:
     bipartite_edges: list[tuple[Socket, Socket, int]] = field(default_factory=list)
 
 
-def get_crossing_reduction_graph(
+def crossing_reduction_graph(
   h: Cluster,
   LT: _MixedGraph,
   G: nx.MultiDiGraph[GNode],
@@ -132,7 +132,7 @@ def crossing_reduction_data(
         prev_clusters = cast(set[Cluster], set(trees[i - 1]) - G.nodes)
         data = []
         for h in topologically_sorted_clusters(LT):
-            G_h = get_crossing_reduction_graph(h, LT, G)
+            G_h = crossing_reduction_graph(h, LT, G)
             H = _ClusterCrossingsData(G_h, list(LT[h]))
 
             u: GNode
