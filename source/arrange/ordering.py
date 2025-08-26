@@ -129,7 +129,7 @@ def crossing_reduction_data(
   is_backwards: bool = False,
 ) -> Iterator[list[_ClusterCrossingsData]]:
     for i, LT in enumerate(trees[1:], 1):
-        prev_clusters = cast(set[Cluster], set(trees[i - 1]) - G.nodes)
+        prev_clusters = cast(set[Cluster], trees[i - 1].nodes - G.nodes)
         data = []
         for h in topologically_sorted_clusters(LT):
             G_h = crossing_reduction_graph(h, LT, G)
