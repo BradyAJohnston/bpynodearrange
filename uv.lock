@@ -69,7 +69,7 @@ wheels = [
 
 [[package]]
 name = "bpynodearrange"
-version = "0.0.4"
+version = "0.0.5"
 source = { virtual = "." }
 dependencies = [
     { name = "databpy" },

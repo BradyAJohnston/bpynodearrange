@@ -227,7 +227,7 @@ class TestSugiyamaLayout:
 
         # Regular nodes should be positioned
         assert node1.location != (0, 0) or node2.location != (0, 0)
-
+        assert abs(node1.location[1] - node2.location[1]) == 50.0
 
 class TestSugiyamaEdgeCases:
     """Test edge cases and error conditions for sugiyama_layout."""
