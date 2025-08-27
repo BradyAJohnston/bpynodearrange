@@ -51,7 +51,8 @@ def get_multidigraph(ntree: NodeTree | None = None) -> nx.MultiDiGraph[GNode]:
     if ntree is None:
         ntree = get_ntree()
     parents = {
-        node.parent: Cluster(cast(NodeFrame | None, node.parent)) for node in ntree.nodes
+        node.parent: Cluster(cast(NodeFrame | None, node.parent))
+        for node in ntree.nodes
     }
     for cluster in parents.values():
         if cluster.node:
@@ -71,10 +72,15 @@ def get_multidigraph(ntree: NodeTree | None = None) -> nx.MultiDiGraph[GNode]:
                 if not to_input.node.select:
                     continue
 
-                target_node = next(target for target in graph if target.node == to_input.node)
+                target_node = next(
+                    target for target in graph if target.node == to_input.node
+                )
                 input_idx = to_input.node.inputs[:].index(to_input)
                 graph.add_edge(
-                    graph_node, target_node, from_socket=Socket(graph_node, output_idx, True), to_socket=Socket(target_node, input_idx, False)
+                    graph_node,
+                    target_node,
+                    from_socket=Socket(graph_node, output_idx, True),
+                    to_socket=Socket(target_node, input_idx, False),
                 )
 
     return graph
@@ -88,7 +94,9 @@ def get_nesting_relations(
         yield from get_nesting_relations(cluster)
 
 
-def save_multi_input_orders(graph: nx.MultiDiGraph[GNode], ntree: NodeTree | None = None) -> None:
+def save_multi_input_orders(
+    graph: nx.MultiDiGraph[GNode], ntree: NodeTree | None = None
+) -> None:
     if ntree is None:
         ntree = get_ntree()
     links = {(link.from_socket, link.to_socket): link for link in ntree.links}
@@ -99,7 +107,9 @@ def save_multi_input_orders(graph: nx.MultiDiGraph[GNode], ntree: NodeTree | Non
             continue
 
         if from_node.is_reroute:
-            for current_node, prev_node in chain([(to_node, from_node)], nx.bfs_edges(graph, from_node, reverse=True)):
+            for current_node, prev_node in chain(
+                [(to_node, from_node)], nx.bfs_edges(graph, from_node, reverse=True)
+            ):
                 if not prev_node.is_reroute:
                     break
             base_from_socket = graph.edges[prev_node, current_node, 0][FROM_SOCKET]
@@ -310,7 +320,9 @@ def frame_padding_of_col(
     return frame_padding() * dist
 
 
-def assign_x_coords(G: nx.DiGraph[GNode], T: nx.DiGraph[GNode | Cluster], x_spacing: float = 50.0) -> None:
+def assign_x_coords(
+    G: nx.DiGraph[GNode], T: nx.DiGraph[GNode | Cluster], x_spacing: float = 50.0
+) -> None:
     columns: list[list[GNode]] = G.graph["columns"]
     x = 0
     for i, col in enumerate(columns):
@@ -331,7 +343,12 @@ def assign_x_coords(G: nx.DiGraph[GNode], T: nx.DiGraph[GNode | Cluster], x_spac
         x += max_width + spacing + frame_padding_of_col(columns, i, T)
 
 
-def is_unnecessary_bend_point(socket: Socket, other_socket: Socket, x_spacing: float = 25.0, y_spacing: float = 25.0) -> bool:
+def is_unnecessary_bend_point(
+    socket: Socket,
+    other_socket: Socket,
+    x_spacing: float = 25.0,
+    y_spacing: float = 25.0,
+) -> bool:
     v = socket.owner
 
     if v.is_reroute:
@@ -421,7 +438,12 @@ def node_overlaps_edge(
     return False
 
 
-def route_edges(G: nx.MultiDiGraph[GNode], T: nx.DiGraph[GNode | Cluster], x_spacing: float = 25.0, y_spacing: float = 25.0) -> None:
+def route_edges(
+    G: nx.MultiDiGraph[GNode],
+    T: nx.DiGraph[GNode | Cluster],
+    x_spacing: float = 25.0,
+    y_spacing: float = 25.0,
+) -> None:
     bend_points = defaultdict(list)
     for v in chain(*G.graph["columns"]):
         add_bend_points(G, v, bend_points, x_spacing, y_spacing)
@@ -429,8 +451,13 @@ def route_edges(G: nx.MultiDiGraph[GNode], T: nx.DiGraph[GNode | Cluster], x_spa
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     edge_of = {b: e for e, d in bend_points.items() for b in d}
-    key = lambda b: (G.edges[edge_of[b]][FROM_SOCKET], b.x, b.y)
-    for (target, *redundant), (from_socket, *_) in group_by(edge_of, key=key).items():
+
+    def bend_point_key(b: GNode) -> tuple[Socket, float, float]:
+        return (G.edges[edge_of[b]][FROM_SOCKET], b.x, b.y)
+
+    for (target, *redundant), (from_socket, *_) in group_by(
+        edge_of, key=bend_point_key
+    ).items():
         for b in redundant:
             dummy_nodes = bend_points[edge_of[b]]
             dummy_nodes[dummy_nodes.index(b)] = target
@@ -537,7 +564,9 @@ def realize_dummy_nodes(CG: ClusterGraph) -> None:
             realize_edges(CG.G, v)
 
 
-def restore_multi_input_orders(graph: nx.MultiDiGraph[GNode], ntree: NodeTree | None = None) -> None:
+def restore_multi_input_orders(
+    graph: nx.MultiDiGraph[GNode], ntree: NodeTree | None = None
+) -> None:
     if ntree is None:
         ntree = get_ntree()
     links = ntree.links
@@ -546,9 +575,13 @@ def restore_multi_input_orders(graph: nx.MultiDiGraph[GNode], ntree: NodeTree | 
         multi_input = socket.bpy
         assert multi_input
 
-        as_links = {link.from_socket: link for link in links if link.to_socket == multi_input}
+        as_links = {
+            link.from_socket: link for link in links if link.to_socket == multi_input
+        }
 
-        if len(as_links) != len({link.multi_input_sort_id for link in as_links.values()}):
+        if len(as_links) != len(
+            {link.multi_input_sort_id for link in as_links.values()}
+        ):
             for link in as_links.values():
                 links.remove(link)
 
@@ -556,12 +589,15 @@ def restore_multi_input_orders(graph: nx.MultiDiGraph[GNode], ntree: NodeTree | 
                 as_links[output] = links.new(output, multi_input)
 
         socket_subgraph = socket_g.subgraph(
-            {sort_item[0] for sort_item in sort_ids} | {socket} | {vertex for vertex in socket_g if vertex.owner.is_reroute}
+            {sort_item[0] for sort_item in sort_ids}
+            | {socket}
+            | {vertex for vertex in socket_g if vertex.owner.is_reroute}
         )
         seen = set()
         for base_from_socket, sort_id in sort_ids:
             other = min(
-                as_links.values(), key=lambda link: abs(link.multi_input_sort_id - sort_id)
+                as_links.values(),
+                key=lambda link: abs(link.multi_input_sort_id - sort_id),
             )
             from_socket = next(
                 source
@@ -573,7 +609,10 @@ def restore_multi_input_orders(graph: nx.MultiDiGraph[GNode], ntree: NodeTree | 
 
 
 def realize_locations(graph: nx.DiGraph[GNode], old_center: Vector) -> None:
-    new_center = (fmean([vertex.x for vertex in graph]), fmean([vertex.y for vertex in graph]))
+    new_center = (
+        fmean([vertex.x for vertex in graph]),
+        fmean([vertex.y for vertex in graph]),
+    )
     offset_x, offset_y = -Vector(new_center) + old_center
 
     for vertex in graph:
@@ -586,7 +625,11 @@ def realize_locations(graph: nx.DiGraph[GNode], old_center: Vector) -> None:
         current_x, current_y = vertex.node.location
         vertex.x += offset_x
         vertex.y += offset_y
-        move(vertex.node, x_offset=vertex.x - current_x, y_offset=vertex.corrected_y() - current_y)
+        move(
+            vertex.node,
+            x_offset=vertex.x - current_x,
+            y_offset=vertex.corrected_y() - current_y,
+        )
 
         vertex.node.parent = vertex.cluster.node
 
@@ -612,7 +655,9 @@ def resize_unshrunken_frame(CG: ClusterGraph, cluster: Cluster) -> None:
 # -------------------------------------------------------------------
 
 
-def sugiyama_layout(ntree: NodeTree, vertical_spacing: float = 50.0, horizontal_spacing: float = 50.0) -> None:
+def sugiyama_layout(
+    ntree: NodeTree, vertical_spacing: float = 50.0, horizontal_spacing: float = 50.0
+) -> None:
     locs = [abs_loc(n) for n in config.selected if n.bl_idname != "NodeFrame"]
 
     if not locs:
@@ -639,8 +684,12 @@ def sugiyama_layout(ntree: NodeTree, vertical_spacing: float = 50.0, horizontal_
         bk_assign_y_coords(graph, vertical_spacing=vertical_spacing)
     else:
         cluster_graph.add_vertical_border_nodes()
-        linear_segments_assign_y_coords(cluster_graph, vertical_spacing=vertical_spacing)
-        cluster_graph.remove_nodes_from([vertex for vertex in graph if vertex.type == GType.VERTICAL_BORDER])
+        linear_segments_assign_y_coords(
+            cluster_graph, vertical_spacing=vertical_spacing
+        )
+        cluster_graph.remove_nodes_from(
+            [vertex for vertex in graph if vertex.type == GType.VERTICAL_BORDER]
+        )
 
     align_reroutes_with_sockets(cluster_graph)
     assign_x_coords(graph, tree, horizontal_spacing)

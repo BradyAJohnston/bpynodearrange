@@ -157,7 +157,9 @@ def crossing_reduction_data(
     trees: Sequence[_MixedGraph],
     is_backwards: bool = False,
 ) -> Iterator[list[_ClusterCrossingsData]]:
-    pos = lambda v: v.col.index(v) if v.type != GType.CLUSTER else inf
+    def pos(v: GNode | Cluster) -> float:
+        return v.col.index(v) if v.type != GType.CLUSTER else inf
+
     for i, LT in enumerate(trees[1:], 1):
         prev_clusters = cast(set[Cluster], trees[i - 1].nodes - G.nodes)
         data = []

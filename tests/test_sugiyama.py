@@ -44,7 +44,7 @@ class TestSugiyamaLayout:
     def test_sugiyama_layout_single_node(self):
         """Test sugiyama_layout with a single node."""
         # Create a single node
-        node = self.ntree.nodes.new(type='ShaderNodeBsdfPrincipled')
+        node = self.ntree.nodes.new(type="ShaderNodeBsdfPrincipled")
         node.location = (0, 0)
         node.select = True
         config.selected = [node]
@@ -62,9 +62,9 @@ class TestSugiyamaLayout:
     def test_sugiyama_layout_overlapping_nodes(self):
         """Test that sugiyama_layout separates overlapping nodes."""
         # Create three overlapping nodes
-        node1 = self.ntree.nodes.new(type='ShaderNodeBsdfPrincipled')
-        node2 = self.ntree.nodes.new(type='ShaderNodeTexImage')
-        node3 = self.ntree.nodes.new(type='ShaderNodeOutputMaterial')
+        node1 = self.ntree.nodes.new(type="ShaderNodeBsdfPrincipled")
+        node2 = self.ntree.nodes.new(type="ShaderNodeTexImage")
+        node3 = self.ntree.nodes.new(type="ShaderNodeOutputMaterial")
 
         # Place all nodes at the same location (overlapping)
         for node in [node1, node2, node3]:
@@ -83,14 +83,16 @@ class TestSugiyamaLayout:
             for j, loc2 in enumerate(locations):
                 if i != j:
                     distance = (loc1 - loc2).length
-                    assert distance > 10, f"Nodes {i} and {j} are still too close: {distance}"
+                    assert distance > 10, (
+                        f"Nodes {i} and {j} are still too close: {distance}"
+                    )
 
     def test_sugiyama_layout_connected_nodes(self):
         """Test sugiyama_layout with connected nodes."""
         # Create a simple shader node chain
-        tex_node = self.ntree.nodes.new(type='ShaderNodeTexImage')
-        bsdf_node = self.ntree.nodes.new(type='ShaderNodeBsdfPrincipled')
-        output_node = self.ntree.nodes.new(type='ShaderNodeOutputMaterial')
+        tex_node = self.ntree.nodes.new(type="ShaderNodeTexImage")
+        bsdf_node = self.ntree.nodes.new(type="ShaderNodeBsdfPrincipled")
+        output_node = self.ntree.nodes.new(type="ShaderNodeOutputMaterial")
 
         # Place all at same location initially
         for node in [tex_node, bsdf_node, output_node]:
@@ -98,8 +100,8 @@ class TestSugiyamaLayout:
             node.select = True
 
         # Create connections
-        self.ntree.links.new(tex_node.outputs['Color'], bsdf_node.inputs['Base Color'])
-        self.ntree.links.new(bsdf_node.outputs['BSDF'], output_node.inputs['Surface'])
+        self.ntree.links.new(tex_node.outputs["Color"], bsdf_node.inputs["Base Color"])
+        self.ntree.links.new(bsdf_node.outputs["BSDF"], output_node.inputs["Surface"])
 
         config.selected = [tex_node, bsdf_node, output_node]
 
@@ -111,14 +113,16 @@ class TestSugiyamaLayout:
         output_x = output_node.location[0]
 
         # Should be arranged in order: texture -> bsdf -> output
-        assert tex_x < bsdf_x < output_x, f"Node order incorrect: {tex_x}, {bsdf_x}, {output_x}"
+        assert tex_x < bsdf_x < output_x, (
+            f"Node order incorrect: {tex_x}, {bsdf_x}, {output_x}"
+        )
 
     def test_sugiyama_layout_with_custom_vertical_spacing(self):
         """Test sugiyama_layout with custom vertical spacing."""
         # Create multiple nodes at same location
         nodes = []
         for i in range(4):
-            node = self.ntree.nodes.new(type='ShaderNodeBsdfPrincipled')
+            node = self.ntree.nodes.new(type="ShaderNodeBsdfPrincipled")
             node.location = (0, 0)
             node.select = True
             nodes.append(node)
@@ -139,17 +143,19 @@ class TestSugiyamaLayout:
     def test_sugiyama_layout_preserves_connections(self):
         """Test that connections between nodes are preserved after layout."""
         # Create nodes with connections
-        input_node = self.ntree.nodes.new(type='ShaderNodeTexImage')
-        middle_node = self.ntree.nodes.new(type='ShaderNodeBsdfPrincipled')
-        output_node = self.ntree.nodes.new(type='ShaderNodeOutputMaterial')
+        input_node = self.ntree.nodes.new(type="ShaderNodeTexImage")
+        middle_node = self.ntree.nodes.new(type="ShaderNodeBsdfPrincipled")
+        output_node = self.ntree.nodes.new(type="ShaderNodeOutputMaterial")
 
         for node in [input_node, middle_node, output_node]:
             node.location = (0, 0)
             node.select = True
 
         # Create links
-        link1 = self.ntree.links.new(input_node.outputs['Color'], middle_node.inputs['Base Color'])
-        link2 = self.ntree.links.new(middle_node.outputs['BSDF'], output_node.inputs['Surface'])
+        self.ntree.links.new(
+            input_node.outputs["Color"], middle_node.inputs["Base Color"]
+        )
+        self.ntree.links.new(middle_node.outputs["BSDF"], output_node.inputs["Surface"])
 
         config.selected = [input_node, middle_node, output_node]
 
@@ -174,11 +180,11 @@ class TestSugiyamaLayout:
     def test_precompute_links_functionality(self):
         """Test the precompute_links function with real node tree."""
         # Create nodes with connections
-        node1 = self.ntree.nodes.new(type='ShaderNodeBsdfPrincipled')
-        node2 = self.ntree.nodes.new(type='ShaderNodeOutputMaterial')
+        node1 = self.ntree.nodes.new(type="ShaderNodeBsdfPrincipled")
+        node2 = self.ntree.nodes.new(type="ShaderNodeOutputMaterial")
 
         # Create a link
-        link = self.ntree.links.new(node1.outputs['BSDF'], node2.inputs['Surface'])
+        link = self.ntree.links.new(node1.outputs["BSDF"], node2.inputs["Surface"])
 
         # Clear and precompute links
         config.linked_sockets.clear()
@@ -199,11 +205,11 @@ class TestSugiyamaLayout:
     def test_sugiyama_layout_with_node_frames(self):
         """Test sugiyama_layout behavior with node frames."""
         # Create regular nodes
-        node1 = self.ntree.nodes.new(type='ShaderNodeBsdfPrincipled')
-        node2 = self.ntree.nodes.new(type='ShaderNodeOutputMaterial')
+        node1 = self.ntree.nodes.new(type="ShaderNodeBsdfPrincipled")
+        node2 = self.ntree.nodes.new(type="ShaderNodeOutputMaterial")
 
         # Create a frame node
-        frame = self.ntree.nodes.new(type='NodeFrame')
+        frame = self.ntree.nodes.new(type="NodeFrame")
         frame.location = (0, 0)
 
         # Set nodes to same location
@@ -246,8 +252,8 @@ class TestSugiyamaEdgeCases:
     def test_sugiyama_layout_no_selected_nodes(self):
         """Test sugiyama_layout when no nodes are selected."""
         # Create nodes but don't select them
-        node1 = self.ntree.nodes.new(type='ShaderNodeBsdfPrincipled')
-        node2 = self.ntree.nodes.new(type='ShaderNodeOutputMaterial')
+        node1 = self.ntree.nodes.new(type="ShaderNodeBsdfPrincipled")
+        node2 = self.ntree.nodes.new(type="ShaderNodeOutputMaterial")
 
         node1.location = (0, 0)
         node2.location = (0, 0)
@@ -265,11 +271,11 @@ class TestSugiyamaEdgeCases:
     def test_sugiyama_layout_complex_node_network(self):
         """Test sugiyama_layout with a more complex node network."""
         # Create a more complex shader network
-        tex1 = self.ntree.nodes.new(type='ShaderNodeTexImage')
-        tex2 = self.ntree.nodes.new(type='ShaderNodeTexImage')
-        mix = self.ntree.nodes.new(type='ShaderNodeMix')
-        bsdf = self.ntree.nodes.new(type='ShaderNodeBsdfPrincipled')
-        output = self.ntree.nodes.new(type='ShaderNodeOutputMaterial')
+        tex1 = self.ntree.nodes.new(type="ShaderNodeTexImage")
+        tex2 = self.ntree.nodes.new(type="ShaderNodeTexImage")
+        mix = self.ntree.nodes.new(type="ShaderNodeMix")
+        bsdf = self.ntree.nodes.new(type="ShaderNodeBsdfPrincipled")
+        output = self.ntree.nodes.new(type="ShaderNodeOutputMaterial")
 
         # Place all at same location
         nodes = [tex1, tex2, mix, bsdf, output]
@@ -278,10 +284,10 @@ class TestSugiyamaEdgeCases:
             node.select = True
 
         # Create connections
-        self.ntree.links.new(tex1.outputs['Color'], mix.inputs['A'])
-        self.ntree.links.new(tex2.outputs['Color'], mix.inputs['B'])
-        self.ntree.links.new(mix.outputs['Result'], bsdf.inputs['Base Color'])
-        self.ntree.links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+        self.ntree.links.new(tex1.outputs["Color"], mix.inputs["A"])
+        self.ntree.links.new(tex2.outputs["Color"], mix.inputs["B"])
+        self.ntree.links.new(mix.outputs["Result"], bsdf.inputs["Base Color"])
+        self.ntree.links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
 
         config.selected = nodes
 
@@ -295,4 +301,6 @@ class TestSugiyamaEdgeCases:
             for j, pos2 in enumerate(positions):
                 if i != j:
                     distance = (pos1 - pos2).length
-                    assert distance > 5, f"Complex network nodes {i} and {j} too close: {distance}"
+                    assert distance > 5, (
+                        f"Complex network nodes {i} and {j} too close: {distance}"
+                    )

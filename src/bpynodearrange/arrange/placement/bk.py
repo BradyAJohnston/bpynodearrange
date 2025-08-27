@@ -30,7 +30,7 @@ def marked_conflicts(G: nx.DiGraph[GNode]) -> set[frozenset[GNode]]:
     marked_edges = set()
     for col1, col2 in pairwise(reversed(G.graph["columns"][1:-1])):
         k_0 = 0
-        l = 0
+        current_index = 0
         for l_1, u in enumerate(col2):
             if should_ensure_alignment(G, u):
                 upper_nbr = next(iter(G.pred[u]))
@@ -40,14 +40,14 @@ def marked_conflicts(G: nx.DiGraph[GNode]) -> set[frozenset[GNode]]:
             else:
                 continue
 
-            while l <= l_1:
-                v = col2[l]
+            while current_index <= l_1:
+                v = col2[current_index]
                 for pred in G.pred[v]:
                     k = pred.col.index(pred)
                     if k < k_0 or k > k_1:
                         marked_edges.add(frozenset((pred, v)))
 
-                l += 1
+                current_index += 1
 
             k_0 = k_1
 
@@ -193,6 +193,6 @@ def bk_assign_y_coords(G: nx.DiGraph[GNode], vertical_spacing: float = 50.0) -> 
 
     balance(layouts)
     for i, v in enumerate(G):
-        values = [l[i] for l in layouts]
+        values = [layout[i] for layout in layouts]
         values.sort()
         v.y = fmean(values[1:3])
