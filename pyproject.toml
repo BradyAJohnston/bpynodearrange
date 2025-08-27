@@ -1,6 +1,6 @@
 [project]
 name = "bpynodearrange"
-version = "0.0.4"
+version = "0.0.5"
 description = "Automatic layout of nodes for Blender node trees"
 authors = [{ name = "Brady Johnston", email = "brady.johnston@me.com" }]
 requires-python = "~=3.11.0"
@@ -12,11 +12,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
 ]
-dependencies = [
-    "networkx>=3.4.2",
- "databpy>=0.1.0",
- "pytest>=8.4.1",
-]
+dependencies = ["networkx>=3.4.2", "databpy>=0.1.0", "pytest>=8.4.1"]
 
 [project.optional-dependencies]
 bpy = ["bpy>=4.2.0"]
