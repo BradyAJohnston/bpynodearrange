@@ -180,50 +180,76 @@ def align_reroutes_with_sockets(cluster_graph: ClusterGraph) -> None:
         outputs = cluster_graph.G.out_edges(path[-1], data=TO_SOCKET)
         reroute_paths[tuple(path)] = [edge[2] for edge in (*inputs, *outputs)]
 
-    while True:
+    max_iterations = 100  # Prevent infinite loops
+    iteration = 0
+    
+    while iteration < max_iterations and reroute_paths:
+        iteration += 1
         changed = False
-        for path, foreign_sockets in tuple(reroute_paths.items()):
+        
+        # Process a copy of the paths to avoid modification during iteration
+        paths_to_process = list(reroute_paths.items())
+        
+        for path, foreign_sockets in paths_to_process:
+            if path not in reroute_paths:  # Path was already removed
+                continue
+                
             current_y = path[0].y
+            
+            # Ensure foreign_sockets is not empty
+            if not foreign_sockets:
+                del reroute_paths[path]
+                continue
+                
             foreign_sockets.sort(key=lambda socket: abs(current_y - socket.y))
             foreign_sockets.sort(
                 key=lambda socket: current_y == socket.owner.y, reverse=True
             )
 
-            if not foreign_sockets or current_y - foreign_sockets[0].y == 0:
+            if current_y - foreign_sockets[0].y == 0:
                 del reroute_paths[path]
                 continue
 
             movement = current_y - foreign_sockets[0].y
-            current_y -= movement
+            new_y = current_y - movement
+            
+            # Check collision constraints
+            collision = False
             if movement < 0:
-                above_y_vals = [
-                    (above_node := vertex.col[vertex.col.index(vertex) - 1]).y
-                    - above_node.height
-                    for vertex in path
-                    if vertex != vertex.col[0]
-                ]
-                if above_y_vals and current_y > min(above_y_vals):
-                    continue
+                above_y_vals = []
+                for vertex in path:
+                    if vertex.col and vertex in vertex.col and vertex != vertex.col[0]:
+                        vertex_index = vertex.col.index(vertex)
+                        above_node = vertex.col[vertex_index - 1]
+                        above_y_vals.append(above_node.y - above_node.height)
+                if above_y_vals and new_y > min(above_y_vals):
+                    collision = True
             else:
-                below_y_vals = [
-                    vertex.col[vertex.col.index(vertex) + 1].y
-                    for vertex in path
-                    if vertex != vertex.col[-1]
-                ]
-                if below_y_vals and max(below_y_vals) > current_y - path[0].height:
-                    continue
-
-            for vertex in path:
-                vertex.y -= movement
-
-            changed = True
-
+                below_y_vals = []
+                for vertex in path:
+                    if vertex.col and vertex in vertex.col and vertex != vertex.col[-1]:
+                        vertex_index = vertex.col.index(vertex)
+                        below_node = vertex.col[vertex_index + 1]
+                        below_y_vals.append(below_node.y)
+                if below_y_vals and max(below_y_vals) > new_y - path[0].height:
+                    collision = True
+            
+            if not collision:
+                # Apply movement
+                for vertex in path:
+                    vertex.y = new_y
+                changed = True
+                del reroute_paths[path]
+            else:
+                # Remove this socket option and try again later
+                if len(foreign_sockets) > 1:
+                    foreign_sockets.pop(0)
+                else:
+                    del reroute_paths[path]
+        
+        # If no changes occurred, we're done
         if not changed:
-            if reroute_paths:
-                for path, foreign_sockets in reroute_paths.items():
-                    del foreign_sockets[0]
-            else:
-                break
+            break
 
 
 def simplify_path(cluster_graph: ClusterGraph, path: list[GNode]) -> None:

@@ -117,24 +117,47 @@ def realize_locations(
     """
     Apply computed node positions to actual Blender nodes.
     """
-    new_center = (
-        fmean([vertex.x for vertex in graph]),
-        fmean([vertex.y for vertex in graph]),
-    )
+    if not graph:
+        return
+        
+    # Collect valid coordinates, filtering out NaN values
+    valid_x_coords = [vertex.x for vertex in graph if isinstance(vertex.x, (int, float)) and vertex.x == vertex.x]
+    valid_y_coords = [vertex.y for vertex in graph if isinstance(vertex.y, (int, float)) and vertex.y == vertex.y]
+    
+    # Use fallback if no valid coordinates
+    if not valid_x_coords or not valid_y_coords:
+        new_center = (0.0, 0.0)
+    else:
+        new_center = (fmean(valid_x_coords), fmean(valid_y_coords))
+    
     offset_x, offset_y = -Vector(new_center) + old_center
 
     for vertex in graph:
-        assert isinstance(vertex.node, Node)
-        assert vertex.cluster
+        if not isinstance(vertex.node, Node) or not vertex.cluster:
+            continue
 
         # Optimization: avoid using bpy.ops for as many nodes as possible
         vertex.node.parent = None
 
-        current_x, current_y = vertex.node.location
-        vertex.x += offset_x
-        vertex.y += offset_y
-        vertex.node.location = (vertex.x, vertex.corrected_y())
+        # Ensure coordinates are valid before applying
+        if isinstance(vertex.x, (int, float)) and vertex.x == vertex.x:
+            final_x = vertex.x + offset_x
+        else:
+            final_x = old_center.x
+            
+        if isinstance(vertex.y, (int, float)) and vertex.y == vertex.y:
+            try:
+                corrected_y = vertex.corrected_y()
+                if isinstance(corrected_y, (int, float)) and corrected_y == corrected_y:
+                    final_y = corrected_y + offset_y
+                else:
+                    final_y = vertex.y + offset_y
+            except:
+                final_y = vertex.y + offset_y
+        else:
+            final_y = old_center.y
 
+        vertex.node.location = (final_x, final_y)
         vertex.node.parent = vertex.cluster.node
 
 

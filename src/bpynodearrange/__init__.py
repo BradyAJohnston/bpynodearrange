@@ -5,7 +5,7 @@ from .arrange import graph, ordering, ranking, structs, sugiyama
 
 __all__ = [
     "graph",
-    "ordering",
+    "ordering", 
     "ranking",
     "structs",
     "sugiyama",
