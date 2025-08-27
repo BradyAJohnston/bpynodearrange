@@ -41,7 +41,7 @@ from mathutils import Vector
 from mathutils.geometry import intersect_line_line_2d
 
 from .. import config
-from ..utils import abs_loc, frame_padding, get_ntree, group_by, move
+from ..utils import abs_loc, frame_padding, get_ntree, group_by
 from .graph import (
     FROM_SOCKET,
     TO_SOCKET,
@@ -1217,7 +1217,6 @@ def realize_locations(
     The function:
     - Temporarily removes parent assignments for optimization
     - Calculates offset to preserve the original center
-    - Uses the efficient `move()` utility for positioning
     - Restores parent assignments after positioning
     """
     new_center = (
@@ -1225,9 +1224,6 @@ def realize_locations(
         fmean([vertex.y for vertex in graph]),
     )
     offset_x, offset_y = -Vector(new_center) + old_center
-
-    # Collect all nodes for the move function
-    all_nodes = list(ntree.nodes)
 
     for vertex in graph:
         assert isinstance(vertex.node, Node)

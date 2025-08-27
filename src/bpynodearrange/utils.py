@@ -77,36 +77,3 @@ def get_bottom(node: Node, y_loc: float | None = None) -> float:
 def frame_padding() -> float:
     # Use fixed padding for headless usage
     return 27.0  # 1.5 * 18 (default widget unit)
-
-
-_MAX_LOC = 100_000
-
-
-def move(node: Node, *, x_offset: float = 0, y_offset: float = 0, all_nodes: list[Node] | None = None) -> None:
-    if x_offset == 0 and y_offset == 0:
-        return
-
-    # If the (absolute) value of a node's X/Y axis exceeds 100k,
-    # `node.location` can't be affected directly. (This often happens with
-    # frames since their locations are relative.)
-
-    loc = node.location
-    if abs(loc.x + x_offset) <= _MAX_LOC and abs(loc.y + y_offset) <= _MAX_LOC:
-        loc += Vector((x_offset, y_offset))
-        return
-
-    # Temporarily select only the node we want to move
-    if all_nodes is None:
-        all_nodes = list(get_ntree().nodes)
-    
-    original_selection = [(n, n.select) for n in all_nodes]
-    
-    for n in all_nodes:
-        n.select = n == node
-
-    assert bpy.context
-    bpy.ops.transform.translate(value=[value for value in (x_offset, y_offset, 0)])
-
-    # Restore original selection
-    for n, was_selected in original_selection:
-        n.select = was_selected
