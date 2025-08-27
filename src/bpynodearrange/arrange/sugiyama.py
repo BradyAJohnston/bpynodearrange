@@ -41,7 +41,7 @@ from mathutils import Vector
 from mathutils.geometry import intersect_line_line_2d
 
 from .. import config
-from ..utils import abs_loc, frame_padding, get_ntree, group_by
+from ..utils import abs_loc, frame_padding, group_by
 from .graph import (
     FROM_SOCKET,
     TO_SOCKET,
@@ -91,7 +91,7 @@ def precompute_links(ntree: NodeTree) -> None:
             config.linked_sockets[link.from_socket].add(link.to_socket)
 
 
-def get_multidigraph(ntree: NodeTree | None = None) -> nx.MultiDiGraph[GNode]:
+def get_multidigraph(ntree: NodeTree) -> nx.MultiDiGraph[GNode]:
     """
     Create a MultiDiGraph representation of all nodes in the tree and their connections.
 
@@ -101,8 +101,8 @@ def get_multidigraph(ntree: NodeTree | None = None) -> nx.MultiDiGraph[GNode]:
 
     Parameters
     ----------
-    ntree : NodeTree, optional
-        The Blender node tree to process. If None, uses the current active node tree.
+    ntree : NodeTree
+        The Blender node tree to process
 
     Returns
     -------
@@ -118,8 +118,6 @@ def get_multidigraph(ntree: NodeTree | None = None) -> nx.MultiDiGraph[GNode]:
     with its parent frame (if any) and establishing parent-child relationships
     between nested frames.
     """
-    if ntree is None:
-        ntree = get_ntree()
     parents = {
         node.parent: Cluster(cast(NodeFrame | None, node.parent))
         for node in ntree.nodes
@@ -188,9 +186,7 @@ def get_nesting_relations(
         yield from get_nesting_relations(cluster)
 
 
-def save_multi_input_orders(
-    graph: nx.MultiDiGraph[GNode], ntree: NodeTree | None = None
-) -> None:
+def save_multi_input_orders(graph: nx.MultiDiGraph[GNode], ntree: NodeTree) -> None:
     """
     Save the current ordering of connections to multi-input sockets.
 
@@ -202,8 +198,8 @@ def save_multi_input_orders(
     ----------
     graph : nx.MultiDiGraph[GNode]
         The node graph containing the connections.
-    ntree : NodeTree, optional
-        The Blender node tree. If None, uses the current active node tree.
+    ntree : NodeTree
+        The Blender node tree.
 
     Notes
     -----
@@ -211,8 +207,6 @@ def save_multi_input_orders(
     preserve the correct ordering relationship. Results are stored in
     `config.multi_input_sort_ids` for later restoration.
     """
-    if ntree is None:
-        ntree = get_ntree()
     links = {(link.from_socket, link.to_socket): link for link in ntree.links}
     for from_node, to_node, edge_data in graph.edges.data():
         to_socket = edge_data[TO_SOCKET]
@@ -414,7 +408,6 @@ def dissolve_reroute_edges(graph: nx.DiGraph[GNode], path: list[GNode]) -> None:
             path.clear()
             return
 
-    links = get_ntree().links
     for input_socket in successor_inputs:
         graph.add_edge(
             predecessor,
@@ -422,7 +415,7 @@ def dissolve_reroute_edges(graph: nx.DiGraph[GNode], path: list[GNode]) -> None:
             from_socket=output_socket,
             to_socket=input_socket,
         )
-        links.new(output_socket.bpy, input_socket.bpy)
+        input_socket.id_data.links.new(output_socket.bpy, input_socket.bpy)
 
 
 def remove_reroutes(cluster_graph: ClusterGraph) -> None:
@@ -963,7 +956,7 @@ def route_edges(
                 (last_bend_point.x, last_bend_point.y),
                 (edge_data[TO_SOCKET].x, edge_data[TO_SOCKET].y),
             )
-            if any(node_overlaps_edge(vertex, line) for vertex in edge[1].column):
+            if any(node_overlaps_edge(vertex, line) for vertex in edge[1].col):
                 continue
 
             bend_points[other_edge] = dummy_nodes
@@ -1065,7 +1058,7 @@ def add_reroute(vertex: GNode) -> None:
     The created reroute inherits the cluster assignment (parent frame)
     from the dummy node and is added to the selected nodes list.
     """
-    reroute = get_ntree().nodes.new(type="NodeReroute")
+    reroute = vertex.node.id_data.nodes.new(type="NodeReroute")
     assert vertex.cluster
     reroute.parent = vertex.cluster.node
     vertex.node = reroute
@@ -1092,7 +1085,7 @@ def realize_edges(graph: nx.DiGraph[GNode], vertex: GNode) -> None:
     nodes, uses their single input/output sockets.
     """
     assert is_real(vertex)
-    links = get_ntree().links
+    links = vertex.node.id_data.links
 
     if graph.pred[vertex]:
         predecessor_output = next(iter(graph.in_edges(vertex, data=FROM_SOCKET)))[2]
@@ -1133,9 +1126,7 @@ def realize_dummy_nodes(cluster_graph: ClusterGraph) -> None:
             realize_edges(cluster_graph.G, vertex)
 
 
-def restore_multi_input_orders(
-    graph: nx.MultiDiGraph[GNode], ntree: NodeTree | None = None
-) -> None:
+def restore_multi_input_orders(graph: nx.MultiDiGraph[GNode], ntree: NodeTree) -> None:
     """
     Restore the original connection order for multi-input sockets.
 
@@ -1147,7 +1138,7 @@ def restore_multi_input_orders(
     graph : nx.MultiDiGraph[GNode]
         The graph containing the current connections.
     ntree : NodeTree, optional
-        The Blender node tree. If None, uses the current active node tree.
+        The Blender node tree
 
     Notes
     -----
@@ -1155,8 +1146,6 @@ def restore_multi_input_orders(
     through the socket graph to find the correct connection mappings.
     If sort IDs aren't unique, it recreates all links to ensure proper ordering.
     """
-    if ntree is None:
-        ntree = get_ntree()
     links = ntree.links
     socket_g = socket_graph(graph)
     for socket, sort_ids in config.multi_input_sort_ids.items():

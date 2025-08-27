@@ -20,7 +20,6 @@ from ..utils import (
     dimensions,
     frame_padding,
     get_bottom,
-    get_ntree,
     get_top,
     group_by,
 )
@@ -58,7 +57,7 @@ def is_real(v: GNode | Cluster) -> TypeGuard[_RealGNode]:
 
 
 class GNode:
-    node: Node | None
+    node: Node
     cluster: Cluster | None
     type: _NonCluster
 
@@ -223,7 +222,7 @@ def add_dummy_nodes_to_edge(
     if not is_real(u) or not is_real(v):
         return
 
-    links = get_ntree().links
+    links = u.node.id_data.links
     if d[TO_SOCKET].bpy.is_multi_input:
         target_link = (d[FROM_SOCKET].bpy, d[TO_SOCKET].bpy)
         links.remove(
@@ -248,7 +247,6 @@ class ClusterGraph:
         self.S = {v for v in self.T if v.type == GType.CLUSTER}
 
     def remove_nodes_from(self, nodes: Iterable[GNode]) -> None:
-        ntree = get_ntree()
         for v in nodes:
             self.G.remove_node(v)
             self.T.remove_node(v)
@@ -267,7 +265,7 @@ class ClusterGraph:
                 val -= sockets
 
             # Remove the node from the Blender node tree
-            ntree.nodes.remove(v.node)
+            v.node.id_data.nodes.remove(v.node)
 
     def merge_edges(self) -> None:
         G = self.G

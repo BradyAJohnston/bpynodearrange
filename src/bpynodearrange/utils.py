@@ -10,12 +10,6 @@ import bpy
 from bpy.types import Node
 from mathutils import Vector
 
-from . import config
-
-
-def get_ntree() -> bpy.types.NodeTree:
-    return bpy.context.space_data.edit_tree  # type: ignore
-
 
 _T1 = TypeVar("_T1", bound=Hashable)
 _T2 = TypeVar("_T2", bound=Hashable)
