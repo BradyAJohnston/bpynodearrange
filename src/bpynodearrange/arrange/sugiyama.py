@@ -415,7 +415,7 @@ def dissolve_reroute_edges(graph: nx.DiGraph[GNode], path: list[GNode]) -> None:
             from_socket=output_socket,
             to_socket=input_socket,
         )
-        input_socket.id_data.links.new(output_socket.bpy, input_socket.bpy)
+        input_socket.owner.node.id_data.links.new(output_socket.bpy, input_socket.bpy)
 
 
 def remove_reroutes(cluster_graph: ClusterGraph) -> None:
@@ -1041,7 +1041,7 @@ def simplify_path(cluster_graph: ClusterGraph, path: list[GNode]) -> None:
             path.remove(node)
 
 
-def add_reroute(vertex: GNode) -> None:
+def add_reroute(vertex: GNode, ntree: NodeTree) -> None:
     """
     Convert a dummy node into a real Blender reroute node.
 
@@ -1058,7 +1058,7 @@ def add_reroute(vertex: GNode) -> None:
     The created reroute inherits the cluster assignment (parent frame)
     from the dummy node and is added to the selected nodes list.
     """
-    reroute = vertex.node.id_data.nodes.new(type="NodeReroute")
+    reroute = ntree.nodes.new(type="NodeReroute")
     assert vertex.cluster
     reroute.parent = vertex.cluster.node
     vertex.node = reroute
@@ -1096,7 +1096,7 @@ def realize_edges(graph: nx.DiGraph[GNode], vertex: GNode) -> None:
             links.new(vertex.node.outputs[0], successor_input.bpy)
 
 
-def realize_dummy_nodes(cluster_graph: ClusterGraph) -> None:
+def realize_dummy_nodes(cluster_graph: ClusterGraph, ntree: NodeTree) -> None:
     """
     Convert all dummy nodes in reroute paths to actual Blender reroute nodes.
 
@@ -1121,7 +1121,7 @@ def realize_dummy_nodes(cluster_graph: ClusterGraph) -> None:
 
         for vertex in path:
             if not is_real(vertex):
-                add_reroute(vertex)
+                add_reroute(vertex, ntree)
 
             realize_edges(cluster_graph.G, vertex)
 
@@ -1358,7 +1358,7 @@ def sugiyama_layout(
     assign_x_coords(graph, tree, horizontal_spacing)
     route_edges(graph, tree, horizontal_spacing / 2, vertical_spacing / 2)
 
-    realize_dummy_nodes(cluster_graph)
+    realize_dummy_nodes(cluster_graph, ntree)
     restore_multi_input_orders(graph, ntree)
     realize_locations(graph, old_center, ntree)
     for cluster in cluster_graph.S:

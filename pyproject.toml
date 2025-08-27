@@ -1,6 +1,6 @@
 [project]
 name = "bpynodearrange"
-version = "0.0.9"
+version = "0.0.10"
 description = "Automatic layout of nodes for Blender node trees"
 authors = [{ name = "Brady Johnston", email = "brady.johnston@me.com" }]
 requires-python = "~=3.11.0"
