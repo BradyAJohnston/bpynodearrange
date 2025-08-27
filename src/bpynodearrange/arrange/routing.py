@@ -25,7 +25,6 @@ from .graph import (
     MultiEdge,
     Socket,
     add_dummy_nodes_to_edge,
-    is_real,
     lowest_common_cluster,
 )
 

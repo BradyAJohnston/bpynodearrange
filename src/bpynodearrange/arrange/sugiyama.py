@@ -9,7 +9,6 @@ the individual phases, each handled by specialized modules.
 
 from __future__ import annotations
 
-from itertools import chain
 from statistics import fmean
 from typing import cast
 
@@ -19,7 +18,12 @@ from mathutils import Vector
 
 from .. import config
 from ..utils import abs_loc
-from .coordinates import add_columns, assign_x_coords, realize_locations, resize_unshrunken_frame
+from .coordinates import (
+    add_columns,
+    assign_x_coords,
+    realize_locations,
+    resize_unshrunken_frame,
+)
 from .graph import Cluster, ClusterGraph, GNode, GType, Socket
 from .multi_input import restore_multi_input_orders, save_multi_input_orders
 from .ordering import minimize_crossings
@@ -59,7 +63,7 @@ def build_graph(ntree: NodeTree) -> ClusterGraph:
             if node.bl_idname != "NodeFrame"
         ]
     )
-    
+
     for graph_node in graph:
         for output_idx, from_output in enumerate(graph_node.node.outputs):
             for to_input in config.linked_sockets[from_output]:
@@ -81,16 +85,14 @@ def build_graph(ntree: NodeTree) -> ClusterGraph:
 
 
 def sugiyama_layout(
-    ntree: NodeTree, 
-    vertical_spacing: float = 50.0, 
-    horizontal_spacing: float = 50.0
+    ntree: NodeTree, vertical_spacing: float = 25.0, horizontal_spacing: float = 50.0
 ) -> None:
     """
     Apply the complete Sugiyama layout algorithm to nodes.
-    
+
     Main orchestration function that coordinates all layout phases:
     1. Graph construction
-    2. Preprocessing 
+    2. Preprocessing
     3. Ranking
     4. Crossing minimization
     5. Coordinate assignment
@@ -102,51 +104,53 @@ def sugiyama_layout(
     locations = [abs_loc(node) for node in layout_nodes]
     if not locations:
         return
-    
+
     old_center = Vector(map(fmean, zip(*locations)))
-    
+
     # Clear and initialize config
     config.multi_input_sort_ids.clear()
-    
+
     # Phase 1: Graph Construction
     precompute_links(ntree)
     cluster_graph = build_graph(ntree)
     graph = cluster_graph.G
     tree = cluster_graph.T
-    
+
     # Phase 2: Preprocessing
     save_multi_input_orders(graph, ntree)
     remove_reroutes(cluster_graph)
-    
+
     # Phase 3: Ranking
     compute_ranks(cluster_graph)
     cluster_graph.merge_edges()
     cluster_graph.insert_dummy_nodes()
-    
-    # Phase 4: Crossing Minimization  
+
+    # Phase 4: Crossing Minimization
     add_columns(graph)
     minimize_crossings(graph, tree)
-    
+
     # Phase 5: Y-Coordinate Assignment
     if len(cluster_graph.S) == 1:
         bk_assign_y_coords(graph, vertical_spacing=vertical_spacing)
     else:
         cluster_graph.add_vertical_border_nodes()
-        linear_segments_assign_y_coords(cluster_graph, vertical_spacing=vertical_spacing)
+        linear_segments_assign_y_coords(
+            cluster_graph, vertical_spacing=vertical_spacing
+        )
         cluster_graph.remove_nodes_from(
             [vertex for vertex in graph if vertex.type == GType.VERTICAL_BORDER]
         )
-    
+
     # Phase 6: Coordinate Assignment and Routing
     align_reroutes_with_sockets(cluster_graph)
     assign_x_coords(graph, tree, horizontal_spacing)
     route_edges(graph, tree, horizontal_spacing / 2, vertical_spacing / 2)
-    
+
     # Phase 7: Realization
     realize_dummy_nodes(cluster_graph, ntree)
     restore_multi_input_orders(graph, ntree)
     realize_locations(graph, old_center, ntree)
-    
+
     # Finalize frame sizes
     for cluster in cluster_graph.S:
         resize_unshrunken_frame(cluster_graph, cluster)

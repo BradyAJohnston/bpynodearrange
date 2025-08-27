@@ -17,9 +17,8 @@ import networkx as nx
 from bpy.types import Node, NodeTree
 from mathutils import Vector
 
-from .. import config
 from ..utils import abs_loc, frame_padding, group_by
-from .graph import FROM_SOCKET, TO_SOCKET, Cluster, GNode, GType, is_real
+from .graph import FROM_SOCKET, TO_SOCKET, Cluster, GNode, is_real
 
 
 def add_columns(graph: nx.DiGraph[GNode]) -> None:
@@ -119,17 +118,25 @@ def realize_locations(
     """
     if not graph:
         return
-        
+
     # Collect valid coordinates, filtering out NaN values
-    valid_x_coords = [vertex.x for vertex in graph if isinstance(vertex.x, (int, float)) and vertex.x == vertex.x]
-    valid_y_coords = [vertex.y for vertex in graph if isinstance(vertex.y, (int, float)) and vertex.y == vertex.y]
-    
+    valid_x_coords = [
+        vertex.x
+        for vertex in graph
+        if isinstance(vertex.x, (int, float)) and vertex.x == vertex.x
+    ]
+    valid_y_coords = [
+        vertex.y
+        for vertex in graph
+        if isinstance(vertex.y, (int, float)) and vertex.y == vertex.y
+    ]
+
     # Use fallback if no valid coordinates
     if not valid_x_coords or not valid_y_coords:
         new_center = (0.0, 0.0)
     else:
         new_center = (fmean(valid_x_coords), fmean(valid_y_coords))
-    
+
     offset_x, offset_y = -Vector(new_center) + old_center
 
     for vertex in graph:
@@ -144,7 +151,7 @@ def realize_locations(
             final_x = vertex.x + offset_x
         else:
             final_x = old_center.x
-            
+
         if isinstance(vertex.y, (int, float)) and vertex.y == vertex.y:
             try:
                 corrected_y = vertex.corrected_y()
@@ -152,7 +159,7 @@ def realize_locations(
                     final_y = corrected_y + offset_y
                 else:
                     final_y = vertex.y + offset_y
-            except:
+            except Exception:
                 final_y = vertex.y + offset_y
         else:
             final_y = old_center.y

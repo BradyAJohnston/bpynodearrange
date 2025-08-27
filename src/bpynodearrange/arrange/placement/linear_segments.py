@@ -176,10 +176,26 @@ def create_unbalanced_placement(
 ) -> None:
     heights = {s: max([v.height for v in s]) for s in linear_segments}
     for segment in linear_segments:
-        values = [
-            w.y - heights[w.segment] for v in segment for w in v.col if w.y is not None
-        ]
-        lowest_y = min(values, default=0) - vertical_spacing
+        # Find the bottom of the immediately preceding segment in the same column
+        preceding_bottom = None
+        for v in segment:
+            # Look for already-placed nodes in the same column that are above this segment
+            col_nodes_above = [
+                w for w in v.col if w.y is not None and w.segment != segment
+            ]
+            if col_nodes_above:
+                # Find the lowest (most negative) Y position of nodes above
+                preceding_bottom = min(
+                    w.y - heights[w.segment] for w in col_nodes_above
+                )
+                break
+
+        # Position this segment below the preceding one with proper spacing
+        if preceding_bottom is not None:
+            lowest_y = preceding_bottom - vertical_spacing
+        else:
+            lowest_y = 0  # First segment starts at 0
+
         for v in segment:
             v.y = lowest_y
 

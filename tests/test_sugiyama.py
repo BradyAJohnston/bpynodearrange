@@ -205,7 +205,7 @@ class TestSugiyamaLayout:
         # Set nodes to same location
         node1.location = (0, 0)
         node2.location = (0, 0)
-        
+
         # Connect the nodes to create a meaningful layout
         self.ntree.links.new(node1.outputs["BSDF"], node2.inputs["Surface"])
 
@@ -220,6 +220,7 @@ class TestSugiyamaLayout:
         assert node1.location != (0, 0) or node2.location != (0, 0)
         # Connected nodes should be separated horizontally in different ranks
         assert abs(node1.location[0] - node2.location[0]) >= 40.0
+
 
 class TestSugiyamaEdgeCases:
     """Test edge cases and error conditions for sugiyama_layout."""

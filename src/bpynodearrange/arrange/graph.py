@@ -26,7 +26,7 @@ from ..utils import (
 from .structs import bNodeSocket
 
 if TYPE_CHECKING:
-    from .placement.linear_segments import Segment
+    pass
 
 
 class GType(Enum):
@@ -58,7 +58,7 @@ def is_real(v: GNode | Cluster) -> TypeGuard[_RealGNode]:
 
 class GNode:
     """Simplified graph node with essential attributes only."""
-    
+
     def __init__(
         self,
         node: Node | None = None,
@@ -71,10 +71,12 @@ class GNode:
         self.cluster = cluster
         self.type = type
         self.rank = rank or 0
-        
+
         # Determine node characteristics
         real = isinstance(node, Node)
-        self.is_reroute = type == GType.DUMMY or (real and node.bl_idname == "NodeReroute")
+        self.is_reroute = type == GType.DUMMY or (
+            real and node.bl_idname == "NodeReroute"
+        )
 
         # Set dimensions
         if self.is_reroute:
@@ -94,7 +96,7 @@ class GNode:
         self.cr = CrossingReduction()
         self.x = 0.0
         self.y = 0.0
-        
+
         # Layout attributes (initialized lazily)
         self.segment = None
         self.reset()

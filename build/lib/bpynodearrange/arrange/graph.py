@@ -26,7 +26,7 @@ from ..utils import (
 from .structs import bNodeSocket
 
 if TYPE_CHECKING:
-    from .placement.linear_segments import Segment
+    pass
 
 
 class GType(Enum):
@@ -57,33 +57,7 @@ def is_real(v: GNode | Cluster) -> TypeGuard[_RealGNode]:
 
 
 class GNode:
-    node: Node
-    cluster: Cluster | None
-    type: _NonCluster
-
-    is_reroute: bool
-    width: float
-    height: float
-
-    rank: int
-    po_num: int
-    lowest_po_num: int
-
-    col: list[GNode]
-    cr: CrossingReduction
-
-    x: float
-    y: float
-
-    segment: Segment
-
-    root: GNode
-    aligned: GNode
-    cells: tuple[list[int], list[float]] | None
-    sink: GNode
-    shift: float
-
-    __slots__ = tuple(__annotations__)
+    """Simplified graph node with essential attributes only."""
 
     def __init__(
         self,
@@ -92,16 +66,19 @@ class GNode:
         type: _NonCluster = GType.NODE,
         rank: int | None = None,
     ) -> None:
-        real = isinstance(node, Node)
-
+        # Core attributes
         self.node = node
         self.cluster = cluster
         self.type = type
-        self.rank = rank  # type: ignore
+        self.rank = rank or 0
+
+        # Determine node characteristics
+        real = isinstance(node, Node)
         self.is_reroute = type == GType.DUMMY or (
             real and node.bl_idname == "NodeReroute"
         )
 
+        # Set dimensions
         if self.is_reroute:
             self.width = REROUTE_DIM.x
             self.height = REROUTE_DIM.y
@@ -112,31 +89,34 @@ class GNode:
             self.width = 0
             self.height = 0
 
-        self.po_num = None  # type: ignore
-        self.lowest_po_num = None  # type: ignore
-
-        self.col = None  # type: ignore
+        # Initialize other attributes as needed
+        self.po_num = 0
+        self.lowest_po_num = 0
+        self.col = None
         self.cr = CrossingReduction()
+        self.x = 0.0
+        self.y = 0.0
 
-        self.x = None  # type: ignore
+        # Layout attributes (initialized lazily)
+        self.segment = None
         self.reset()
-
-        self.segment = None  # type: ignore
 
     def __hash__(self) -> int:
         return id(self)
 
     def reset(self) -> None:
+        """Reset layout-specific attributes."""
         self.root = self
         self.aligned = self
         self.cells = None
-
         self.sink = self
         self.shift = inf
-        self.y = None  # type: ignore
+        self.y = None  # This will be set during layout
 
     def corrected_y(self) -> float:
-        assert is_real(self)
+        """Get y-coordinate corrected for Blender's coordinate system."""
+        if not is_real(self):
+            return self.y
         return self.y + (abs_loc(self.node).y - get_top(self.node))
 
 
@@ -265,7 +245,7 @@ class ClusterGraph:
                 val -= sockets
 
             # Remove the node from the Blender node tree
-            ntree.nodes.remove(v.node)
+            v.node.id_data.nodes.remove(v.node)
 
     def merge_edges(self) -> None:
         G = self.G

@@ -6,7 +6,6 @@ from functools import cache
 from operator import itemgetter
 from typing import TypeVar
 
-import bpy
 from bpy.types import Node
 from mathutils import Vector
 

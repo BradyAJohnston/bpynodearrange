@@ -9,15 +9,12 @@ including path detection, removal, alignment, and realization.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Collection
-from itertools import chain
-from typing import cast
+from collections.abc import Callable
 
 import networkx as nx
 from bpy.types import NodeTree
 
 from .. import config
-from ..utils import group_by
 from .graph import (
     FROM_SOCKET,
     TO_SOCKET,
@@ -182,25 +179,25 @@ def align_reroutes_with_sockets(cluster_graph: ClusterGraph) -> None:
 
     max_iterations = 100  # Prevent infinite loops
     iteration = 0
-    
+
     while iteration < max_iterations and reroute_paths:
         iteration += 1
         changed = False
-        
+
         # Process a copy of the paths to avoid modification during iteration
         paths_to_process = list(reroute_paths.items())
-        
+
         for path, foreign_sockets in paths_to_process:
             if path not in reroute_paths:  # Path was already removed
                 continue
-                
+
             current_y = path[0].y
-            
+
             # Ensure foreign_sockets is not empty
             if not foreign_sockets:
                 del reroute_paths[path]
                 continue
-                
+
             foreign_sockets.sort(key=lambda socket: abs(current_y - socket.y))
             foreign_sockets.sort(
                 key=lambda socket: current_y == socket.owner.y, reverse=True
@@ -212,7 +209,7 @@ def align_reroutes_with_sockets(cluster_graph: ClusterGraph) -> None:
 
             movement = current_y - foreign_sockets[0].y
             new_y = current_y - movement
-            
+
             # Check collision constraints
             collision = False
             if movement < 0:
@@ -233,7 +230,7 @@ def align_reroutes_with_sockets(cluster_graph: ClusterGraph) -> None:
                         below_y_vals.append(below_node.y)
                 if below_y_vals and max(below_y_vals) > new_y - path[0].height:
                     collision = True
-            
+
             if not collision:
                 # Apply movement
                 for vertex in path:
@@ -246,7 +243,7 @@ def align_reroutes_with_sockets(cluster_graph: ClusterGraph) -> None:
                     foreign_sockets.pop(0)
                 else:
                     del reroute_paths[path]
-        
+
         # If no changes occurred, we're done
         if not changed:
             break

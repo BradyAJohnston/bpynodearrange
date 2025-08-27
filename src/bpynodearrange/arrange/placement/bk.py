@@ -104,7 +104,7 @@ def place_block(v: GNode, is_up: bool, vertical_spacing: float = 50.0) -> None:
     while True:
         if (i := w.col.index(w)) > 0:
             u = w.col[i - 1].root
-            place_block(u, is_up)
+            place_block(u, is_up, vertical_spacing)
 
             if v.sink == v:
                 v.sink = u.sink
