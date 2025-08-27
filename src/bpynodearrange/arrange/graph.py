@@ -16,14 +16,14 @@ from bpy.types import Node, NodeFrame, NodeSocket
 
 from .. import config
 from ..utils import (
-  REROUTE_DIM,
-  abs_loc,
-  dimensions,
-  frame_padding,
-  get_bottom,
-  get_ntree,
-  get_top,
-  group_by,
+    REROUTE_DIM,
+    abs_loc,
+    dimensions,
+    frame_padding,
+    get_bottom,
+    get_ntree,
+    get_top,
+    group_by,
 )
 from .structs import bNodeSocket
 
@@ -49,7 +49,9 @@ class CrossingReduction:
         self.barycenter = None
 
 
-_NonCluster = Literal[GType.NODE, GType.DUMMY, GType.HORIZONTAL_BORDER, GType.VERTICAL_BORDER]
+_NonCluster = Literal[
+    GType.NODE, GType.DUMMY, GType.HORIZONTAL_BORDER, GType.VERTICAL_BORDER
+]
 
 
 def is_real(v: GNode | Cluster) -> TypeGuard[_RealGNode]:
@@ -86,11 +88,11 @@ class GNode:
     __slots__ = tuple(__annotations__)
 
     def __init__(
-      self,
-      node: Node | None = None,
-      cluster: Cluster | None = None,
-      type: _NonCluster = GType.NODE,
-      rank: int | None = None,
+        self,
+        node: Node | None = None,
+        cluster: Cluster | None = None,
+        type: _NonCluster = GType.NODE,
+        rank: int | None = None,
     ) -> None:
         real = isinstance(node, Node)
 
@@ -98,7 +100,9 @@ class GNode:
         self.cluster = cluster
         self.type = type
         self.rank = rank  # type: ignore
-        self.is_reroute = type == GType.DUMMY or (real and node.bl_idname == 'NodeReroute')
+        self.is_reroute = type == GType.DUMMY or (
+            real and node.bl_idname == "NodeReroute"
+        )
 
         if self.is_reroute:
             self.width = REROUTE_DIM.x
@@ -173,15 +177,17 @@ class Cluster:
 # -------------------------------------------------------------------
 
 
-def get_nesting_relations(v: GNode | Cluster) -> Iterator[tuple[Cluster, GNode | Cluster]]:
+def get_nesting_relations(
+    v: GNode | Cluster,
+) -> Iterator[tuple[Cluster, GNode | Cluster]]:
     if c := v.cluster:
         yield (c, v)
         yield from get_nesting_relations(c)
 
 
 def lowest_common_cluster(
-  T: nx.DiGraph[GNode | Cluster],
-  edges: Iterable[tuple[GNode, GNode, Any]],
+    T: nx.DiGraph[GNode | Cluster],
+    edges: Iterable[tuple[GNode, GNode, Any]],
 ) -> dict[Edge, Cluster]:
     pairs = {(u, v) for u, v, _ in edges if u.cluster != v.cluster}
     return dict(nx.tree_all_pairs_lowest_common_ancestor(T, pairs=pairs))
@@ -192,9 +198,9 @@ def add_dummy_edge(G: nx.DiGraph[GNode], u: GNode, v: GNode) -> None:
 
 
 def add_dummy_nodes_to_edge(
-  G: nx.MultiDiGraph[GNode],
-  edge: MultiEdge,
-  dummy_nodes: Sequence[GNode],
+    G: nx.MultiDiGraph[GNode],
+    edge: MultiEdge,
+    dummy_nodes: Sequence[GNode],
 ) -> None:
     if not dummy_nodes:
         return
@@ -221,7 +227,9 @@ def add_dummy_nodes_to_edge(
     links = get_ntree().links
     if d[TO_SOCKET].bpy.is_multi_input:
         target_link = (d[FROM_SOCKET].bpy, d[TO_SOCKET].bpy)
-        links.remove(next(l for l in links if (l.from_socket, l.to_socket) == target_link))
+        links.remove(
+            next(l for l in links if (l.from_socket, l.to_socket) == target_link)
+        )
 
 
 # https://api.semanticscholar.org/CorpusID:14932050
@@ -289,7 +297,12 @@ class ClusterGraph:
                 add_dummy_edge(G, *pair)
 
             w = dummy_nodes[0]
-            G.add_edge(u, dummy_nodes[0], from_socket=from_socket, to_socket=Socket(w, 0, False))
+            G.add_edge(
+                u,
+                dummy_nodes[0],
+                from_socket=from_socket,
+                to_socket=Socket(w, 0, False),
+            )
 
     def insert_dummy_nodes(self) -> None:
         G = self.G
@@ -297,7 +310,9 @@ class ClusterGraph:
 
         # -------------------------------------------------------------------
 
-        long_edges = [(u, v, k) for u, v, k in G.edges(keys=True) if v.rank - u.rank > 1]
+        long_edges = [
+            (u, v, k) for u, v, k in G.edges(keys=True) if v.rank - u.rank > 1
+        ]
         lca = lowest_common_cluster(T, long_edges)
         for u, v, k in long_edges:
             assert u.cluster
@@ -316,7 +331,9 @@ class ClusterGraph:
             if not c.node:
                 continue
 
-            ranks = sorted({v.rank for v in nx.descendants(T, c) if v.type != GType.CLUSTER})
+            ranks = sorted(
+                {v.rank for v in nx.descendants(T, c) if v.type != GType.CLUSTER}
+            )
             for i, j in pairwise(ranks):
                 if j - i == 1:
                     continue
@@ -336,7 +353,7 @@ class ClusterGraph:
     def add_vertical_border_nodes(self) -> None:
         T = self.T
         G = self.G
-        columns = G.graph['columns']
+        columns = G.graph["columns"]
         for c in self.S:
             if not c.node:
                 continue
@@ -344,7 +361,9 @@ class ClusterGraph:
             nodes = [v for v in nx.descendants(T, c) if v.type != GType.CLUSTER]
             lower_border_nodes = []
             upper_border_nodes = []
-            for subcol in group_by(nodes, key=lambda v: columns.index(v.col), sort=True):
+            for subcol in group_by(
+                nodes, key=lambda v: columns.index(v.col), sort=True
+            ):
                 col = subcol[0].col
                 indices = [col.index(v) for v in subcol]
 
@@ -414,8 +433,8 @@ class Socket:
 Edge = tuple[GNode, GNode]
 MultiEdge = tuple[GNode, GNode, int]
 
-FROM_SOCKET = 'from_socket'
-TO_SOCKET = 'to_socket'
+FROM_SOCKET = "from_socket"
+TO_SOCKET = "to_socket"
 
 
 def socket_graph(G: nx.MultiDiGraph[GNode]) -> nx.DiGraph[Socket]:

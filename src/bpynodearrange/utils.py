@@ -17,14 +17,14 @@ def get_ntree() -> bpy.types.NodeTree:
     return bpy.context.space_data.edit_tree  # type: ignore
 
 
-_T1 = TypeVar('_T1', bound=Hashable)
-_T2 = TypeVar('_T2', bound=Hashable)
+_T1 = TypeVar("_T1", bound=Hashable)
+_T2 = TypeVar("_T2", bound=Hashable)
 
 
 def group_by(
-  iterable: Iterable[_T1],
-  key: Callable[[_T1], _T2],
-  sort: bool = False,
+    iterable: Iterable[_T1],
+    key: Callable[[_T1], _T2],
+    sort: bool = False,
 ) -> dict[tuple[_T1, ...], _T2]:
     groups = defaultdict(list)
     for item in iterable:
@@ -48,7 +48,7 @@ REROUTE_DIM = Vector((8, 8))
 
 
 def dimensions(node: Node) -> Vector:
-    if node.bl_idname != 'NodeReroute':
+    if node.bl_idname != "NodeReroute":
         assert bpy.context
         return node.dimensions / bpy.context.preferences.system.ui_scale
     else:

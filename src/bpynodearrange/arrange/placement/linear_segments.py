@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING
 
 import networkx as nx
 
-from ... import config
 from ..graph import FROM_SOCKET, TO_SOCKET, Cluster, GNode, GType, Socket
 
 if TYPE_CHECKING:
@@ -37,7 +36,7 @@ class Segment:
 
     def split(self, v: GNode) -> Segment:
         nodes = self.nodes
-        new_segment = Segment(nodes[nodes.index(v):])
+        new_segment = Segment(nodes[nodes.index(v) :])
         for w in new_segment:
             w.segment = new_segment
             nodes.remove(w)
@@ -76,7 +75,11 @@ def complex_clusters(CG: ClusterGraph) -> set[Cluster]:
     T = CG.T
     clusters = set()
     for c in CG.S:
-        if any(G.in_degree[v] > 1 or G.out_degree[v] > 1 for v in T[c] if v.type != GType.CLUSTER):
+        if any(
+            G.in_degree[v] > 1 or G.out_degree[v] > 1
+            for v in T[c]
+            if v.type != GType.CLUSTER
+        ):
             clusters.add(c)
 
     return clusters
@@ -107,7 +110,7 @@ def get_linear_segments(CG: ClusterGraph) -> list[Segment]:
 
     linear_segments = []
     seen = set()
-    for col in G.graph['columns']:
+    for col in G.graph["columns"]:
         for u in col:
             if u in seen:
                 continue
@@ -125,7 +128,9 @@ def get_linear_segments(CG: ClusterGraph) -> list[Segment]:
     return linear_segments
 
 
-def prevent_cycles(linear_segments: list[Segment], columns: Sequence[Sequence[GNode]]) -> None:
+def prevent_cycles(
+    linear_segments: list[Segment], columns: Sequence[Sequence[GNode]]
+) -> None:
     for col1, col2 in pairwise(reversed(columns)):
         for i, v in enumerate(col1):
             segments2 = [w.segment for w in col2]
@@ -134,7 +139,7 @@ def prevent_cycles(linear_segments: list[Segment], columns: Sequence[Sequence[GN
                 continue
 
             segments1 = [w.segment for w in col1]
-            below = set(segments2[segments2.index(v.segment) + 1:])
+            below = set(segments2[segments2.index(v.segment) + 1 :])
             cycle_segments = [s for s in segments1[:i] if s in below]
 
             if not cycle_segments:
@@ -148,8 +153,8 @@ def prevent_cycles(linear_segments: list[Segment], columns: Sequence[Sequence[GN
 
 
 def sort_linear_segments(
-  linear_segments: list[Segment],
-  columns: Sequence[Sequence[GNode]],
+    linear_segments: list[Segment],
+    columns: Sequence[Sequence[GNode]],
 ) -> None:
     for segment in linear_segments:
         for v in segment:
@@ -166,11 +171,15 @@ def sort_linear_segments(
     linear_segments.sort(key=lambda v: indicies[v])
 
 
-def create_unbalanced_placement(linear_segments: Sequence[Segment]) -> None:
+def create_unbalanced_placement(
+    linear_segments: Sequence[Segment], vertical_spacing: float = 50.0
+) -> None:
     heights = {s: max([v.height for v in s]) for s in linear_segments}
     for segment in linear_segments:
-        values = [w.y - heights[w.segment] for v in segment for w in v.col if w.y is not None]
-        lowest_y = min(values, default=0) - config.MARGIN.y
+        values = [
+            w.y - heights[w.segment] for v in segment for w in v.col if w.y is not None
+        ]
+        lowest_y = min(values, default=0) - vertical_spacing
         for v in segment:
             v.y = lowest_y
 
@@ -184,18 +193,20 @@ _THRESH_FAC = 20
 
 @cache
 def get_out_edges(G: nx.DiGraph[GNode], v: GNode) -> list[tuple[Socket, Socket]]:
-    return [#
-      (d[FROM_SOCKET], d[TO_SOCKET])
-      for _, w, d in G.out_edges.data(nbunch=v)
-      if w.segment != v.segment]
+    return [  #
+        (d[FROM_SOCKET], d[TO_SOCKET])
+        for _, w, d in G.out_edges.data(nbunch=v)
+        if w.segment != v.segment
+    ]
 
 
 @cache
 def get_in_edges(G: nx.DiGraph[GNode], v: GNode) -> list[tuple[Socket, Socket]]:
-    return [#
-      (d[FROM_SOCKET], d[TO_SOCKET])
-      for u, _, d in G.in_edges.data(nbunch=v)
-      if u.segment != v.segment]
+    return [  #
+        (d[FROM_SOCKET], d[TO_SOCKET])
+        for u, _, d in G.in_edges.data(nbunch=v)
+        if u.segment != v.segment
+    ]
 
 
 def calc_deflection(G: nx.DiGraph[GNode], segment: Segment, mode: _Mode) -> None:
@@ -207,23 +218,33 @@ def calc_deflection(G: nx.DiGraph[GNode], segment: Segment, mode: _Mode) -> None
 
         if mode != _Mode.FORW_PENDULUM:
             for from_socket, to_socket in get_out_edges(G, v):
-                node_deflection += to_socket.owner.y + to_socket.y - (v.y + from_socket.y)
+                node_deflection += (
+                    to_socket.owner.y + to_socket.y - (v.y + from_socket.y)
+                )
                 edge_weight_sum += 1
 
         if mode != _Mode.BACKW_PENDULUM:
             for from_socket, to_socket in get_in_edges(G, v):
-                node_deflection += from_socket.owner.y + from_socket.y - (v.y + to_socket.y)
+                node_deflection += (
+                    from_socket.owner.y + from_socket.y - (v.y + to_socket.y)
+                )
                 edge_weight_sum += 1
 
         if edge_weight_sum > 0:
             segment_deflection += node_deflection / edge_weight_sum
             node_weight_sum += 1
 
-    segment.deflection = _DEFLECTION_DAMPENING * segment_deflection / node_weight_sum if node_weight_sum > 0 else 0
+    segment.deflection = (
+        _DEFLECTION_DAMPENING * segment_deflection / node_weight_sum
+        if node_weight_sum > 0
+        else 0
+    )
     segment.weight = node_weight_sum
 
 
-def merge_regions(columns: Sequence[Sequence[GNode]]) -> None:
+def merge_regions(
+    columns: Sequence[Sequence[GNode]], vertical_spacing: float = 50.0
+) -> None:
     while True:
         changed = False
         for col in columns:
@@ -240,14 +261,20 @@ def merge_regions(columns: Sequence[Sequence[GNode]]) -> None:
 
                 assert v.cluster and w.cluster
                 if (
-                  not v.cluster.node or not w.cluster.node
-                  or GType.VERTICAL_BORDER in {v.type, w.type}
-                ) and v.y + region1.deflection - v.height - config.MARGIN.y >= w.y + region2.deflection:
+                    (
+                        not v.cluster.node
+                        or not w.cluster.node
+                        or GType.VERTICAL_BORDER in {v.type, w.type}
+                    )
+                    and v.y + region1.deflection - v.height - vertical_spacing
+                    >= w.y + region2.deflection
+                ):
                     continue
 
                 region2.deflection = (
-                  region2.weight * region2.deflection
-                  + region1.weight * region1.deflection) / weight_sum
+                    region2.weight * region2.deflection
+                    + region1.weight * region1.deflection
+                ) / weight_sum
                 region2.weight = weight_sum
                 region1.ref_segment = region2
 
@@ -257,7 +284,11 @@ def merge_regions(columns: Sequence[Sequence[GNode]]) -> None:
             break
 
 
-def balance_placement(G: nx.DiGraph[GNode], linear_segments: Sequence[Segment]) -> None:
+def balance_placement(
+    G: nx.DiGraph[GNode],
+    linear_segments: Sequence[Segment],
+    vertical_spacing: float = 50.0,
+) -> None:
     pendulum_iters = _PENDULUM_ITERS
     final_iters = _FINAL_ITERS
 
@@ -271,7 +302,7 @@ def balance_placement(G: nx.DiGraph[GNode], linear_segments: Sequence[Segment]) 
             calc_deflection(G, segment, mode)
             total_deflection += abs(segment.deflection)
 
-        merge_regions(G.graph['columns'])
+        merge_regions(G.graph["columns"], vertical_spacing)
 
         for segment in linear_segments:
             deflection = segment.region().deflection
@@ -280,15 +311,23 @@ def balance_placement(G: nx.DiGraph[GNode], linear_segments: Sequence[Segment]) 
 
         if mode in {_Mode.FORW_PENDULUM, _Mode.BACKW_PENDULUM}:
             pendulum_iters -= 1
-            if pendulum_iters <= 0 and (total_deflection < prev_total_deflection
-              or -pendulum_iters > _ITERS):
+            if pendulum_iters <= 0 and (
+                total_deflection < prev_total_deflection or -pendulum_iters > _ITERS
+            ):
                 mode = _Mode.RUBBER
                 prev_total_deflection = inf
             else:
-                mode = _Mode.BACKW_PENDULUM if mode == _Mode.FORW_PENDULUM else _Mode.FORW_PENDULUM
+                mode = (
+                    _Mode.BACKW_PENDULUM
+                    if mode == _Mode.FORW_PENDULUM
+                    else _Mode.FORW_PENDULUM
+                )
                 prev_total_deflection = total_deflection
         else:
-            ready = total_deflection >= prev_total_deflection or prev_total_deflection - total_deflection < _THRESH_FAC / _ITERS
+            ready = (
+                total_deflection >= prev_total_deflection
+                or prev_total_deflection - total_deflection < _THRESH_FAC / _ITERS
+            )
             prev_total_deflection = total_deflection
             if ready:
                 final_iters -= 1
@@ -297,10 +336,11 @@ def balance_placement(G: nx.DiGraph[GNode], linear_segments: Sequence[Segment]) 
             break
 
 
-def linear_segments_assign_y_coords(CG: ClusterGraph) -> None:
+def linear_segments_assign_y_coords(
+    CG: ClusterGraph, vertical_spacing: float = 50.0
+) -> None:
     linear_segments = get_linear_segments(CG)
-    sort_linear_segments(linear_segments, CG.G.graph['columns'])
+    sort_linear_segments(linear_segments, CG.G.graph["columns"])
 
-    create_unbalanced_placement(linear_segments)
-    if config.SETTINGS.balance:
-        balance_placement(CG.G, linear_segments)
+    create_unbalanced_placement(linear_segments, vertical_spacing)
+    balance_placement(CG.G, linear_segments, vertical_spacing)

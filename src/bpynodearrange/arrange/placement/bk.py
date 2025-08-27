@@ -14,7 +14,6 @@ from typing import cast
 
 import networkx as nx
 
-from ... import config
 from ...utils import group_by
 from ..graph import GNode
 
@@ -29,7 +28,7 @@ def should_ensure_alignment(G: nx.DiGraph[GNode], u: GNode) -> bool:
 
 def marked_conflicts(G: nx.DiGraph[GNode]) -> set[frozenset[GNode]]:
     marked_edges = set()
-    for col1, col2 in pairwise(reversed(G.graph['columns'][1:-1])):
+    for col1, col2 in pairwise(reversed(G.graph["columns"][1:-1])):
         k_0 = 0
         l = 0
         for l_1, u in enumerate(col2):
@@ -56,15 +55,15 @@ def marked_conflicts(G: nx.DiGraph[GNode]) -> set[frozenset[GNode]]:
 
 
 def horizontal_alignment(
-  G: nx.DiGraph[GNode],
-  marked_edges: Collection[frozenset[GNode]],
+    G: nx.DiGraph[GNode],
+    marked_edges: Collection[frozenset[GNode]],
 ) -> None:
-    for col in G.graph['columns']:
+    for col in G.graph["columns"]:
         prev_i = -1
         for v in col:
             predecessors = sorted(G.pred[v], key=lambda u: u.col.index(u))
             m = (len(predecessors) - 1) / 2
-            for u in predecessors[floor(m):ceil(m) + 1]:
+            for u in predecessors[floor(m) : ceil(m) + 1]:
                 i = u.col.index(u)
 
                 if v.aligned != v or {u, v} in marked_edges or prev_i >= i:
@@ -77,24 +76,26 @@ def horizontal_alignment(
 
 
 def precompute_cells(G: nx.DiGraph[Hashable]) -> None:
-    columns = G.graph['columns']
+    columns = G.graph["columns"]
     blocks = group_by(chain(*columns), key=lambda v: v.root)
     for block, root in blocks.items():
         indicies = [columns.index(v.col) for v in block]
         root.cells = (indicies, [v.height for v in block])
 
 
-def min_separation(u: GNode, v: GNode, is_up: bool) -> float:
+def min_separation(
+    u: GNode, v: GNode, is_up: bool, vertical_spacing: float = 50.0
+) -> float:
     if is_up:
         u, v = v, u
 
     assert u.root.cells
     indicies = u.root.cells[0]
     heights = [h for i, h in zip(*v.root.cells) if indicies[0] <= i <= indicies[-1]]
-    return max(heights, default=0) + config.MARGIN.y
+    return max(heights, default=0) + vertical_spacing
 
 
-def place_block(v: GNode, is_up: bool) -> None:
+def place_block(v: GNode, is_up: bool, vertical_spacing: float = 50.0) -> None:
     if cast(float | None, v.y) is not None:
         return
 
@@ -109,7 +110,7 @@ def place_block(v: GNode, is_up: bool) -> None:
                 v.sink = u.sink
 
             if v.sink == u.sink:
-                v.y = max(v.y, u.y + min_separation(u, v, is_up))
+                v.y = max(v.y, u.y + min_separation(u, v, is_up, vertical_spacing))
 
         w = w.aligned
         if w == v:
@@ -121,12 +122,14 @@ def place_block(v: GNode, is_up: bool) -> None:
         w.sink = v.sink
 
 
-def vertical_compaction(G: nx.DiGraph[GNode], is_up: bool) -> None:
+def vertical_compaction(
+    G: nx.DiGraph[GNode], is_up: bool, vertical_spacing: float = 50.0
+) -> None:
     for v in G:
         if v.root == v:
-            place_block(v, is_up)
+            place_block(v, is_up, vertical_spacing)
 
-    columns = G.graph['columns']
+    columns = G.graph["columns"]
     neighborings = defaultdict(set)
 
     for col in columns:
@@ -139,7 +142,7 @@ def vertical_compaction(G: nx.DiGraph[GNode], is_up: bool) -> None:
             col[0].sink.shift = 0
 
         for u, v in neighborings[tuple(col)]:
-            y = v.y - (u.y + min_separation(u, v, is_up))
+            y = v.y - (u.y + min_separation(u, v, is_up, vertical_spacing))
             u.sink.shift = min(u.sink.shift, v.sink.shift + y)
 
     for v in G:
@@ -163,8 +166,8 @@ def balance(layouts: list[list[float]]) -> None:
             layout[j] += movement
 
 
-def bk_assign_y_coords(G: nx.DiGraph[GNode]) -> None:
-    columns = G.graph['columns']
+def bk_assign_y_coords(G: nx.DiGraph[GNode], vertical_spacing: float = 50.0) -> None:
+    columns = G.graph["columns"]
     for col in columns:
         col.reverse()
 
@@ -176,7 +179,7 @@ def bk_assign_y_coords(G: nx.DiGraph[GNode]) -> None:
         for dir_y in (-1, 1):
             horizontal_alignment(G, marked_edges)
             precompute_cells(G)  # type: ignore
-            vertical_compaction(G, dir_y == 1)
+            vertical_compaction(G, dir_y == 1, vertical_spacing)
             layouts.append([v.y * -dir_y for v in G])
 
             for v in G:
@@ -187,11 +190,6 @@ def bk_assign_y_coords(G: nx.DiGraph[GNode]) -> None:
 
     for col in columns:
         col.reverse()
-
-    if not config.SETTINGS.balance:
-        for v, y in zip(G, layouts[1]):
-            v.y = y
-        return
 
     balance(layouts)
     for i, v in enumerate(G):
