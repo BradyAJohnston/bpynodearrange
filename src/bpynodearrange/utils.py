@@ -31,7 +31,7 @@ def group_by(
         groups[key(item)].append(item)
 
     items = sorted(groups.items(), key=itemgetter(0)) if sort else groups.items()
-    return {tuple(g): k for k, g in items}
+    return {tuple(group): key for key, group in items}
 
 
 def abs_loc(node: Node) -> Vector:
@@ -82,8 +82,8 @@ def frame_padding() -> float:
 _MAX_LOC = 100_000
 
 
-def move(node: Node, *, x: float = 0, y: float = 0) -> None:
-    if x == 0 and y == 0:
+def move(node: Node, *, x_offset: float = 0, y_offset: float = 0) -> None:
+    if x_offset == 0 and y_offset == 0:
         return
 
     # If the (absolute) value of a node's X/Y axis exceeds 100k,
@@ -91,15 +91,15 @@ def move(node: Node, *, x: float = 0, y: float = 0) -> None:
     # frames since their locations are relative.)
 
     loc = node.location
-    if abs(loc.x + x) <= _MAX_LOC and abs(loc.y + y) <= _MAX_LOC:
-        loc += Vector((x, y))
+    if abs(loc.x + x_offset) <= _MAX_LOC and abs(loc.y + y_offset) <= _MAX_LOC:
+        loc += Vector((x_offset, y_offset))
         return
 
-    for n in config.selected:
-        n.select = n == node
+    for selected_node in config.selected:
+        selected_node.select = selected_node == node
 
     assert bpy.context
-    bpy.ops.transform.translate(value=[v for v in (x, y, 0)])
+    bpy.ops.transform.translate(value=[value for value in (x_offset, y_offset, 0)])
 
-    for n in config.selected:
-        n.select = True
+    for selected_node in config.selected:
+        selected_node.select = True
