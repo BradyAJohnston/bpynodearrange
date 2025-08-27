@@ -49,12 +49,7 @@ REROUTE_DIM = Vector((8, 8))
 
 def dimensions(node: Node) -> Vector:
     if node.bl_idname != "NodeReroute":
-        assert bpy.context
-        ui_scale = bpy.context.preferences.system.ui_scale
-        # Handle test environment where ui_scale might be 0
-        if ui_scale <= 0:
-            ui_scale = 1.0
-        return node.dimensions / ui_scale
+        return node.dimensions
     else:
         return REROUTE_DIM
 
@@ -80,14 +75,8 @@ def get_bottom(node: Node, y_loc: float | None = None) -> float:
 
 @cache
 def frame_padding() -> float:
-    assert bpy.context
-    prefs = bpy.context.preferences.system
-    ui_scale = prefs.ui_scale
-    # Handle test environment where ui_scale might be 0
-    if ui_scale <= 0:
-        ui_scale = 1.0
-    widget_unit = int(18 * ui_scale) + (2 * prefs.pixel_size)
-    return 1.5 * widget_unit / ui_scale
+    # Use fixed padding for headless usage
+    return 27.0  # 1.5 * 18 (default widget unit)
 
 
 _MAX_LOC = 100_000
@@ -110,11 +99,7 @@ def move(node: Node, *, x: float = 0, y: float = 0) -> None:
         n.select = n == node
 
     assert bpy.context
-    ui_scale = bpy.context.preferences.system.ui_scale
-    # Handle test environment where ui_scale might be 0
-    if ui_scale <= 0:
-        ui_scale = 1.0
-    bpy.ops.transform.translate(value=[v * ui_scale for v in (x, y, 0)])
+    bpy.ops.transform.translate(value=[v for v in (x, y, 0)])
 
     for n in config.selected:
         n.select = True
