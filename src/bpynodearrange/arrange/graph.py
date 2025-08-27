@@ -266,7 +266,7 @@ class ClusterGraph:
             for val in config.linked_sockets.values():
                 val -= sockets
 
-            config.selected.remove(v.node)
+            # Remove the node from the Blender node tree
             ntree.nodes.remove(v.node)
 
     def merge_edges(self) -> None:

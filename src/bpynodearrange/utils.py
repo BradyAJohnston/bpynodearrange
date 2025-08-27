@@ -82,7 +82,7 @@ def frame_padding() -> float:
 _MAX_LOC = 100_000
 
 
-def move(node: Node, *, x_offset: float = 0, y_offset: float = 0) -> None:
+def move(node: Node, *, x_offset: float = 0, y_offset: float = 0, all_nodes: list[Node] | None = None) -> None:
     if x_offset == 0 and y_offset == 0:
         return
 
@@ -95,11 +95,18 @@ def move(node: Node, *, x_offset: float = 0, y_offset: float = 0) -> None:
         loc += Vector((x_offset, y_offset))
         return
 
-    for selected_node in config.selected:
-        selected_node.select = selected_node == node
+    # Temporarily select only the node we want to move
+    if all_nodes is None:
+        all_nodes = list(get_ntree().nodes)
+    
+    original_selection = [(n, n.select) for n in all_nodes]
+    
+    for n in all_nodes:
+        n.select = n == node
 
     assert bpy.context
     bpy.ops.transform.translate(value=[value for value in (x_offset, y_offset, 0)])
 
-    for selected_node in config.selected:
-        selected_node.select = True
+    # Restore original selection
+    for n, was_selected in original_selection:
+        n.select = was_selected

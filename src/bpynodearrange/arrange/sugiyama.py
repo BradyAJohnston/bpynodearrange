@@ -93,9 +93,9 @@ def precompute_links(ntree: NodeTree) -> None:
 
 def get_multidigraph(ntree: NodeTree | None = None) -> nx.MultiDiGraph[GNode]:
     """
-    Create a MultiDiGraph representation of the selected nodes and their connections.
+    Create a MultiDiGraph representation of all nodes in the tree and their connections.
     
-    Converts selected Blender nodes into a NetworkX MultiDiGraph where nodes become
+    Converts all Blender nodes into a NetworkX MultiDiGraph where nodes become
     GNode objects and links become directed edges with socket information. Excludes
     NodeFrame nodes from the graph while preserving their clustering relationships.
     
@@ -108,7 +108,7 @@ def get_multidigraph(ntree: NodeTree | None = None) -> nx.MultiDiGraph[GNode]:
     -------
     nx.MultiDiGraph[GNode]
         A directed multigraph where:
-        - Nodes are GNode objects wrapping selected Blender nodes (excluding frames)
+        - Nodes are GNode objects wrapping all Blender nodes (excluding frames)
         - Edges represent connections between node sockets
         - Edge data includes 'from_socket' and 'to_socket' Socket objects
         
@@ -132,19 +132,21 @@ def get_multidigraph(ntree: NodeTree | None = None) -> nx.MultiDiGraph[GNode]:
     graph.add_nodes_from(
         [
             GNode(node, parents[node.parent])
-            for node in config.selected
+            for node in ntree.nodes
             if node.bl_idname != "NodeFrame"
         ]
     )
     for graph_node in graph:
         for output_idx, from_output in enumerate(graph_node.node.outputs):
             for to_input in config.linked_sockets[from_output]:
-                if not to_input.node.select:
+                # Only include connections between nodes in the graph
+                target_node = next(
+                    (target for target in graph if target.node == to_input.node), None
+                )
+                if target_node is None:
                     continue
 
-                target_node = next(
-                    target for target in graph if target.node == to_input.node
-                )
+                # target_node already found above
                 input_idx = to_input.node.inputs[:].index(to_input)
                 graph.add_edge(
                     graph_node,
@@ -317,7 +319,6 @@ def is_safe_to_remove(vertex: GNode) -> bool:
     - It's not a real node (dummy node)
     - It has no label
     - It's not used in multi-input socket ordering
-    - All connected nodes are selected
     
     Parameters
     ----------
@@ -344,13 +345,9 @@ def is_safe_to_remove(vertex: GNode) -> bool:
         if any(vertex == sort_item[0].owner for sort_item in sort_values):
             return False
 
-    return all(
-        socket.node.select
-        for socket in chain(
-            config.linked_sockets[vertex.node.inputs[0]],
-            config.linked_sockets[vertex.node.outputs[0]],
-        )
-    )
+    # Since we're processing all nodes in the tree, we can safely remove reroutes
+    # that don't have labels and aren't used in multi-input ordering
+    return True
 
 
 def dissolve_reroute_edges(graph: nx.DiGraph[GNode], path: list[GNode]) -> None:
@@ -461,7 +458,7 @@ def add_columns(graph: nx.DiGraph[GNode]) -> None:
     for column in columns:
         column.sort(key=lambda vertex: abs_loc(vertex.node).y if is_real(vertex) else 0, reverse=True)
         for vertex in column:
-            vertex.column = column
+            vertex.col = column
 
 
 # -------------------------------------------------------------------
@@ -513,15 +510,15 @@ def align_reroutes_with_sockets(cluster_graph: ClusterGraph) -> None:
             current_y -= movement
             if movement < 0:
                 above_y_vals = [
-                    (above_node := vertex.column[vertex.column.index(vertex) - 1]).y - above_node.height
+                    (above_node := vertex.col[vertex.col.index(vertex) - 1]).y - above_node.height
                     for vertex in path
-                    if vertex != vertex.column[0]
+                    if vertex != vertex.col[0]
                 ]
                 if above_y_vals and current_y > min(above_y_vals):
                     continue
             else:
                 below_y_vals = [
-                    vertex.column[vertex.column.index(vertex) + 1].y for vertex in path if vertex != vertex.column[-1]
+                    vertex.col[vertex.col.index(vertex) + 1].y for vertex in path if vertex != vertex.col[-1]
                 ]
                 if below_y_vals and max(below_y_vals) > current_y - path[0].height:
                     continue
@@ -678,11 +675,11 @@ def is_unnecessary_bend_point(
     if vertex.is_reroute:
         return False
 
-    vertex_index = vertex.column.index(vertex)
+    vertex_index = vertex.col.index(vertex)
     is_above = other_socket.y > socket.y
 
     try:
-        neighbor = vertex.column[vertex_index - 1] if is_above else vertex.column[vertex_index + 1]
+        neighbor = vertex.col[vertex_index - 1] if is_above else vertex.col[vertex_index + 1]
     except IndexError:
         return True
 
@@ -744,7 +741,7 @@ def add_bend_points(
     - The bend point would actually help avoid visual conflicts
     """
     edge_data: dict[str, Socket]
-    largest = max(vertex.column, key=lambda node: node.width)
+    largest = max(vertex.col, key=lambda node: node.width)
     for from_node, to_node, key, edge_data in (
         *graph.out_edges(vertex, data=True, keys=True),
         *graph.in_edges(vertex, data=True, keys=True),
@@ -974,7 +971,6 @@ def add_reroute(vertex: GNode) -> None:
     reroute = get_ntree().nodes.new(type="NodeReroute")
     assert vertex.cluster
     reroute.parent = vertex.cluster.node
-    config.selected.append(reroute)
     vertex.node = reroute
     vertex.type = GType.NODE
 
@@ -1101,7 +1097,7 @@ def restore_multi_input_orders(
             seen_sockets.add(from_socket)
 
 
-def realize_locations(graph: nx.DiGraph[GNode], old_center: Vector) -> None:
+def realize_locations(graph: nx.DiGraph[GNode], old_center: Vector, ntree: NodeTree) -> None:
     """
     Apply computed node positions to actual Blender nodes.
     
@@ -1128,6 +1124,9 @@ def realize_locations(graph: nx.DiGraph[GNode], old_center: Vector) -> None:
         fmean([vertex.y for vertex in graph]),
     )
     offset_x, offset_y = -Vector(new_center) + old_center
+    
+    # Collect all nodes for the move function
+    all_nodes = list(ntree.nodes)
 
     for vertex in graph:
         assert isinstance(vertex.node, Node)
@@ -1143,6 +1142,7 @@ def realize_locations(graph: nx.DiGraph[GNode], old_center: Vector) -> None:
             vertex.node,
             x_offset=vertex.x - current_x,
             y_offset=vertex.corrected_y() - current_y,
+            all_nodes=all_nodes,
         )
 
         vertex.node.parent = vertex.cluster.node
@@ -1234,7 +1234,9 @@ def sugiyama_layout(
     
     >>> sugiyama_layout(ntree, vertical_spacing=30, horizontal_spacing=40)
     """
-    locations = [abs_loc(node) for node in config.selected if node.bl_idname != "NodeFrame"]
+    # Get all non-frame nodes for layout
+    layout_nodes = [node for node in ntree.nodes if node.bl_idname != "NodeFrame"]
+    locations = [abs_loc(node) for node in layout_nodes]
 
     if not locations:
         return
@@ -1273,6 +1275,6 @@ def sugiyama_layout(
 
     realize_dummy_nodes(cluster_graph)
     restore_multi_input_orders(graph, ntree)
-    realize_locations(graph, old_center)
+    realize_locations(graph, old_center, ntree)
     for cluster in cluster_graph.S:
         resize_unshrunken_frame(cluster_graph, cluster)

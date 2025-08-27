@@ -26,7 +26,6 @@ class TestSugiyamaLayout:
         self.ntree.nodes.clear()
 
         # Reset config
-        config.selected = []
         config.linked_sockets.clear()
         config.multi_input_sort_ids.clear()
 
@@ -47,7 +46,6 @@ class TestSugiyamaLayout:
         node = self.ntree.nodes.new(type="ShaderNodeBsdfPrincipled")
         node.location = (0, 0)
         node.select = True
-        config.selected = [node]
 
         original_location = Vector(node.location)
 
@@ -70,8 +68,6 @@ class TestSugiyamaLayout:
         for node in [node1, node2, node3]:
             node.location = (0, 0)
             node.select = True
-
-        config.selected = [node1, node2, node3]
 
         sugiyama_layout(self.ntree)
 
@@ -103,8 +99,6 @@ class TestSugiyamaLayout:
         self.ntree.links.new(tex_node.outputs["Color"], bsdf_node.inputs["Base Color"])
         self.ntree.links.new(bsdf_node.outputs["BSDF"], output_node.inputs["Surface"])
 
-        config.selected = [tex_node, bsdf_node, output_node]
-
         sugiyama_layout(self.ntree)
 
         # Verify nodes are arranged in a logical flow (left to right)
@@ -126,8 +120,6 @@ class TestSugiyamaLayout:
             node.location = (0, 0)
             node.select = True
             nodes.append(node)
-
-        config.selected = nodes
 
         # Test with larger vertical spacing
         sugiyama_layout(self.ntree, vertical_spacing=100.0)
@@ -156,8 +148,6 @@ class TestSugiyamaLayout:
             input_node.outputs["Color"], middle_node.inputs["Base Color"]
         )
         self.ntree.links.new(middle_node.outputs["BSDF"], output_node.inputs["Surface"])
-
-        config.selected = [input_node, middle_node, output_node]
 
         # Store original connections
         original_links = len(self.ntree.links)
@@ -220,8 +210,6 @@ class TestSugiyamaLayout:
         for node in [node1, node2, frame]:
             node.select = True
 
-        config.selected = [node1, node2, frame]
-
         # Layout should work and ignore frame nodes appropriately
         sugiyama_layout(self.ntree)
 
@@ -241,7 +229,6 @@ class TestSugiyamaEdgeCases:
         self.ntree = mat.node_tree
         self.ntree.nodes.clear()
 
-        config.selected = []
         config.linked_sockets.clear()
         config.multi_input_sort_ids.clear()
 
@@ -249,8 +236,8 @@ class TestSugiyamaEdgeCases:
 
         bpy.data.materials.remove(mat)
 
-    def test_sugiyama_layout_no_selected_nodes(self):
-        """Test sugiyama_layout when no nodes are selected."""
+    def test_sugiyama_layout_all_nodes_in_tree(self):
+        """Test sugiyama_layout processes all nodes in the tree regardless of selection."""
         # Create nodes but don't select them
         node1 = self.ntree.nodes.new(type="ShaderNodeBsdfPrincipled")
         node2 = self.ntree.nodes.new(type="ShaderNodeOutputMaterial")
@@ -258,15 +245,13 @@ class TestSugiyamaEdgeCases:
         node1.location = (0, 0)
         node2.location = (0, 0)
 
-        # Don't add to config.selected
-        config.selected = []
+        # Don't select the nodes (but algorithm should still process them)
 
-        # Should handle gracefully
+        # Should handle gracefully and arrange all nodes
         sugiyama_layout(self.ntree)
 
-        # Nodes should remain at original positions
-        assert node1.location == Vector((0, 0))
-        assert node2.location == Vector((0, 0))
+        # Nodes should be arranged (no longer at original positions)
+        assert node1.location != Vector((0, 0)) or node2.location != Vector((0, 0))
 
     def test_sugiyama_layout_complex_node_network(self):
         """Test sugiyama_layout with a more complex node network."""
@@ -288,8 +273,6 @@ class TestSugiyamaEdgeCases:
         self.ntree.links.new(tex2.outputs["Color"], mix.inputs["B"])
         self.ntree.links.new(mix.outputs["Result"], bsdf.inputs["Base Color"])
         self.ntree.links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
-
-        config.selected = nodes
 
         # Should arrange complex network without errors
         sugiyama_layout(self.ntree)
