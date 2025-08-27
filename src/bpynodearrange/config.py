@@ -15,13 +15,7 @@ selected: list[Node] = []
 linked_sockets: defaultdict[NodeSocket, set[NodeSocket]] = defaultdict(set)
 multi_input_sort_ids: defaultdict[Socket, list[tuple[Socket, int]]] = defaultdict(list)
 
-MARGIN: Vector
-
-
 def reset() -> None:
     selected.clear()
     linked_sockets.clear()
     multi_input_sort_ids.clear()
-
-    global MARGIN
-    MARGIN = None  # type: ignore
