@@ -1335,6 +1335,10 @@ def sugiyama_layout(
 
     old_center = Vector(map(fmean, zip(*locations)))
 
+    # Clear config to ensure clean state
+    config.linked_sockets.clear()
+    config.multi_input_sort_ids.clear()
+
     precompute_links(ntree)
     cluster_graph = ClusterGraph(get_multidigraph(ntree))
     graph = cluster_graph.G

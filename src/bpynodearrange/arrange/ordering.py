@@ -45,7 +45,9 @@ def get_col_nesting_trees(
 def expand_multi_inputs(G: nx.MultiDiGraph[GNode]) -> None:
     H = socket_graph(G)
     reroutes = {v for v in H if v.owner.is_reroute}
-    for v in {s.owner for s in config.multi_input_sort_ids}:
+    # Only process nodes that are actually in the graph
+    nodes_to_process = {s.owner for s in config.multi_input_sort_ids} & set(G.nodes())
+    for v in nodes_to_process:
         inputs = sorted(
             {e[2] for e in G.in_edges(v, data=TO_SOCKET)}, key=lambda s: s.idx
         )
