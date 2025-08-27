@@ -1,0 +1,29 @@
+[project]
+name = "bpynodearrange"
+version = "0.1.0"
+description = "Automatic layout of nodes for Blender node trees"
+authors = [
+    {name = "Brady Johnston", email = "brady.johnston@me.com"}
+]
+requires-python = "~=3.11.0"
+dependencies = [
+    "networkx>=3.4.2", 
+    "bpy>=4.2.0"
+]
+license = {text = "GPL-3.0-or-later"}
+readme = "README.md"
+keywords = ["blender", "nodes", "layout", "graph"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+]
+
+[project.urls]
+Homepage = "https://github.com/BradyAJohnston/bpynodearrange"
+Repository = "https://github.com/BradyAJohnston/bpynodearrange"
+
+[tool.uv]
+dev-dependencies = []

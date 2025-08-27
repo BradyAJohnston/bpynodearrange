@@ -1,0 +1,37 @@
+Metadata-Version: 2.4
+Name: pynodearrange
+Version: 0.1.0
+Summary: Automatic layout of nodes for Blender node trees
+Author-email: Brady Johnston <brady.johnston@me.com>
+License: GPL-3.0-or-later
+Project-URL: Homepage, https://github.com/BradyAJohnston/pynodearrange
+Project-URL: Repository, https://github.com/BradyAJohnston/pynodearrange
+Keywords: blender,nodes,layout,graph
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: End Users/Desktop
+Classifier: License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Requires-Python: ~=3.11.0
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: networkx>=3.4.2
+Requires-Dist: bpy>=4.2.0
+Dynamic: license-file
+
+Node Arrange
+=======
+
+An add-on for the automatic layout of nodes.
+
+No matter the node tree complexity, nodes will be pleasingly arranged, organised, and aligned. You choose what to arrange – select specific nodes or the whole node tree. Adjust settings like spacing and balancing to suit your taste.
+
+Install
+---
+
+Download from the [Blender Extensions Platform](https://extensions.blender.org/add-ons/node-arrange/).
+
+Location
+---
+
+Node Editor ‣ Sidebar ‣ Arrange
