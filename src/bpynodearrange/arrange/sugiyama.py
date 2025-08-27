@@ -10,7 +10,7 @@ nodes, and multi-input sockets.
 
 The Sugiyama framework consists of four main phases:
 1. Cycle removal and ranking assignment
-2. Edge crossings minimization  
+2. Edge crossings minimization
 3. Coordinate assignment (x and y positioning)
 4. Edge routing and bend point insertion
 
@@ -68,16 +68,16 @@ from .ranking import compute_ranks
 def precompute_links(ntree: NodeTree) -> None:
     """
     Precompute valid links in the node tree for efficient lookup.
-    
+
     Builds a lookup table of connected sockets by iterating through all links
     in the node tree and storing only valid, visible connections. This avoids
     repeatedly checking link validity and reduces lookup time complexity.
-    
+
     Parameters
     ----------
     ntree : NodeTree
         The Blender node tree to precompute links for.
-        
+
     Notes
     -----
     Results are stored in `config.linked_sockets` as a defaultdict mapping
@@ -94,16 +94,16 @@ def precompute_links(ntree: NodeTree) -> None:
 def get_multidigraph(ntree: NodeTree | None = None) -> nx.MultiDiGraph[GNode]:
     """
     Create a MultiDiGraph representation of all nodes in the tree and their connections.
-    
+
     Converts all Blender nodes into a NetworkX MultiDiGraph where nodes become
     GNode objects and links become directed edges with socket information. Excludes
     NodeFrame nodes from the graph while preserving their clustering relationships.
-    
+
     Parameters
     ----------
     ntree : NodeTree, optional
         The Blender node tree to process. If None, uses the current active node tree.
-        
+
     Returns
     -------
     nx.MultiDiGraph[GNode]
@@ -111,7 +111,7 @@ def get_multidigraph(ntree: NodeTree | None = None) -> nx.MultiDiGraph[GNode]:
         - Nodes are GNode objects wrapping all Blender nodes (excluding frames)
         - Edges represent connections between node sockets
         - Edge data includes 'from_socket' and 'to_socket' Socket objects
-        
+
     Notes
     -----
     This function also builds the cluster hierarchy by associating each node
@@ -163,20 +163,20 @@ def get_nesting_relations(
 ) -> Iterator[tuple[Cluster, GNode | Cluster]]:
     """
     Generate all nesting relationships for a vertex up the cluster hierarchy.
-    
+
     Recursively yields parent-child relationships starting from the given vertex
     and moving up the cluster hierarchy until reaching the root level.
-    
+
     Parameters
     ----------
     vertex : GNode | Cluster
         The vertex to find nesting relations for.
-        
+
     Yields
     ------
     tuple[Cluster, GNode | Cluster]
         Pairs of (parent_cluster, child_vertex) representing the nesting hierarchy.
-        
+
     Examples
     --------
     If node A is in frame F1, which is in frame F2:
@@ -193,18 +193,18 @@ def save_multi_input_orders(
 ) -> None:
     """
     Save the current ordering of connections to multi-input sockets.
-    
+
     Multi-input sockets in Blender can have multiple connections, and their
     order affects evaluation. This function preserves the current connection
     order so it can be restored after layout operations.
-    
+
     Parameters
     ----------
     graph : nx.MultiDiGraph[GNode]
         The node graph containing the connections.
     ntree : NodeTree, optional
         The Blender node tree. If None, uses the current active node tree.
-        
+
     Notes
     -----
     For reroute nodes, traces back to find the original source socket to
@@ -248,11 +248,11 @@ def get_reroute_paths(
 ) -> list[list[GNode]]:
     """
     Find connected chains of reroute nodes that can be processed together.
-    
+
     Identifies sequences of reroute nodes that form linear paths, taking into
     account cluster boundaries and alignment constraints. Used for optimization
     operations like reroute removal or alignment.
-    
+
     Parameters
     ----------
     cluster_graph : ClusterGraph
@@ -265,21 +265,25 @@ def get_reroute_paths(
         clusters contain only reroute nodes.
     must_be_aligned : bool, default=False
         If True, only includes edges between reroutes at the same y-coordinate.
-        
+
     Returns
     -------
     list[list[GNode]]
         List of reroute paths, where each path is a list of connected reroute
         nodes sorted in topological order. Paths are sorted by their starting
         node's position in the graph.
-        
+
     Notes
     -----
     The function removes edges from reroutes that have multiple outputs,
     keeping only linear chains. This prevents branching in the paths.
     """
     graph = cluster_graph.G
-    reroutes = {vertex for vertex in graph if vertex.is_reroute and (not function or function(vertex))}
+    reroutes = {
+        vertex
+        for vertex in graph
+        if vertex.is_reroute and (not function or function(vertex))
+    }
     subgraph = nx.DiGraph(graph.subgraph(reroutes))
 
     for vertex in subgraph:
@@ -290,22 +294,38 @@ def get_reroute_paths(
         reroute_clusters = {  #
             cluster
             for cluster in cluster_graph.S
-            if all(vertex.is_reroute for vertex in cluster_graph.T[cluster] if vertex.type != GType.CLUSTER)
+            if all(
+                vertex.is_reroute
+                for vertex in cluster_graph.T[cluster]
+                if vertex.type != GType.CLUSTER
+            )
         }
         subgraph.remove_edges_from(
             [  #
                 (from_node, to_node)
                 for from_node, to_node in subgraph.edges
-                if from_node.cluster != to_node.cluster and {from_node.cluster, to_node.cluster} & reroute_clusters
+                if from_node.cluster != to_node.cluster
+                and {from_node.cluster, to_node.cluster} & reroute_clusters
             ]
         )
 
     if must_be_aligned:
-        subgraph.remove_edges_from([(from_node, to_node) for from_node, to_node in subgraph.edges if from_node.y != to_node.y])
+        subgraph.remove_edges_from(
+            [
+                (from_node, to_node)
+                for from_node, to_node in subgraph.edges
+                if from_node.y != to_node.y
+            ]
+        )
 
-    indices = {vertex: i for i, vertex in enumerate(nx.topological_sort(graph)) if vertex in reroutes}
+    indices = {
+        vertex: i
+        for i, vertex in enumerate(nx.topological_sort(graph))
+        if vertex in reroutes
+    }
     paths = [
-        sorted(component, key=lambda vertex: indices[vertex]) for component in nx.weakly_connected_components(subgraph)
+        sorted(component, key=lambda vertex: indices[vertex])
+        for component in nx.weakly_connected_components(subgraph)
     ]
     paths.sort(key=lambda path: indices[path[0]])
     return paths
@@ -314,22 +334,22 @@ def get_reroute_paths(
 def is_safe_to_remove(vertex: GNode) -> bool:
     """
     Check if a reroute node can be safely removed from the graph.
-    
+
     A reroute node is safe to remove if:
     - It's not a real node (dummy node)
     - It has no label
     - It's not used in multi-input socket ordering
-    
+
     Parameters
     ----------
     vertex : GNode
         The node to check for removal safety.
-        
+
     Returns
     -------
     bool
         True if the node can be safely removed, False otherwise.
-        
+
     Notes
     -----
     This function is typically used before dissolving reroute paths to
@@ -353,18 +373,18 @@ def is_safe_to_remove(vertex: GNode) -> bool:
 def dissolve_reroute_edges(graph: nx.DiGraph[GNode], path: list[GNode]) -> None:
     """
     Remove a reroute path by connecting its inputs directly to its outputs.
-    
+
     Takes a linear path of reroute nodes and replaces it with direct connections
     from the path's input to all of its outputs, effectively removing the
     intermediate reroute nodes.
-    
+
     Parameters
     ----------
     graph : nx.DiGraph[GNode]
         The graph containing the reroute path.
     path : list[GNode]
         Linear sequence of reroute nodes to dissolve.
-        
+
     Notes
     -----
     The function also creates corresponding Blender node links to match
@@ -376,7 +396,9 @@ def dissolve_reroute_edges(graph: nx.DiGraph[GNode], path: list[GNode]) -> None:
         return
 
     try:
-        predecessor, _, output_socket = next(iter(graph.in_edges(path[0], data=FROM_SOCKET)))
+        predecessor, _, output_socket = next(
+            iter(graph.in_edges(path[0], data=FROM_SOCKET))
+        )
     except StopIteration:
         return
 
@@ -385,29 +407,37 @@ def dissolve_reroute_edges(graph: nx.DiGraph[GNode], path: list[GNode]) -> None:
     # Check if a reroute has been used to link the same output to the same multi-input multiple
     # times
     for *_, edge_data in graph.out_edges(predecessor, data=True):
-        if edge_data[FROM_SOCKET] == output_socket and edge_data[TO_SOCKET] in successor_inputs:
+        if (
+            edge_data[FROM_SOCKET] == output_socket
+            and edge_data[TO_SOCKET] in successor_inputs
+        ):
             path.clear()
             return
 
     links = get_ntree().links
     for input_socket in successor_inputs:
-        graph.add_edge(predecessor, input_socket.owner, from_socket=output_socket, to_socket=input_socket)
+        graph.add_edge(
+            predecessor,
+            input_socket.owner,
+            from_socket=output_socket,
+            to_socket=input_socket,
+        )
         links.new(output_socket.bpy, input_socket.bpy)
 
 
 def remove_reroutes(cluster_graph: ClusterGraph) -> None:
     """
     Remove unnecessary reroute nodes from the cluster graph.
-    
+
     Processes reroute paths and either removes them completely (by dissolving)
     or simplifies them by removing intermediate nodes while preserving
     connectivity. Handles special cases for reroute-only clusters.
-    
+
     Parameters
     ----------
     cluster_graph : ClusterGraph
         The cluster graph to process.
-        
+
     Notes
     -----
     For clusters containing only reroute nodes, long paths are simplified
@@ -417,7 +447,10 @@ def remove_reroutes(cluster_graph: ClusterGraph) -> None:
     reroute_clusters = {  #
         cluster
         for cluster in cluster_graph.S
-        if all(vertex.type != GType.CLUSTER and vertex.is_reroute for vertex in cluster_graph.T[cluster])
+        if all(
+            vertex.type != GType.CLUSTER and vertex.is_reroute
+            for vertex in cluster_graph.T[cluster]
+        )
     }
     for path in get_reroute_paths(cluster_graph, is_safe_to_remove):
         if path[0].cluster in reroute_clusters:
@@ -436,16 +469,16 @@ def remove_reroutes(cluster_graph: ClusterGraph) -> None:
 def add_columns(graph: nx.DiGraph[GNode]) -> None:
     """
     Organize nodes into columns based on their rank and sort by position.
-    
+
     Groups nodes by their rank (horizontal layer) and sorts them within
     each column by their current y-coordinate. This establishes the basic
     columnar structure for the layout.
-    
+
     Parameters
     ----------
     graph : nx.DiGraph[GNode]
         The directed graph to organize into columns.
-        
+
     Notes
     -----
     Results are stored in `graph.graph['columns']` as a list of node lists.
@@ -453,10 +486,16 @@ def add_columns(graph: nx.DiGraph[GNode]) -> None:
     Real nodes are sorted by their actual y-position, while dummy nodes
     default to y=0.
     """
-    columns = [list(component) for component in group_by(graph, key=lambda vertex: vertex.rank, sort=True)]
+    columns = [
+        list(component)
+        for component in group_by(graph, key=lambda vertex: vertex.rank, sort=True)
+    ]
     graph.graph["columns"] = columns
     for column in columns:
-        column.sort(key=lambda vertex: abs_loc(vertex.node).y if is_real(vertex) else 0, reverse=True)
+        column.sort(
+            key=lambda vertex: abs_loc(vertex.node).y if is_real(vertex) else 0,
+            reverse=True,
+        )
         for vertex in column:
             vertex.col = column
 
@@ -467,23 +506,23 @@ def add_columns(graph: nx.DiGraph[GNode]) -> None:
 def align_reroutes_with_sockets(cluster_graph: ClusterGraph) -> None:
     """
     Align reroute nodes with their connected sockets for cleaner routing.
-    
+
     Adjusts the vertical positions of reroute paths to minimize visual
     clutter by aligning them with the sockets they connect to. Uses an
     iterative process to find optimal alignments.
-    
+
     Parameters
     ----------
     cluster_graph : ClusterGraph
         The cluster graph containing reroute paths to align.
-        
+
     Notes
     -----
     The alignment process considers:
     - Distance to connected sockets
     - Collision avoidance with other nodes in the same column
     - Preference for exact y-coordinate matches with connected sockets
-    
+
     The algorithm iteratively refines positions until no more improvements
     can be made or all alignment opportunities are exhausted.
     """
@@ -500,7 +539,9 @@ def align_reroutes_with_sockets(cluster_graph: ClusterGraph) -> None:
         for path, foreign_sockets in tuple(reroute_paths.items()):
             current_y = path[0].y
             foreign_sockets.sort(key=lambda socket: abs(current_y - socket.y))
-            foreign_sockets.sort(key=lambda socket: current_y == socket.owner.y, reverse=True)
+            foreign_sockets.sort(
+                key=lambda socket: current_y == socket.owner.y, reverse=True
+            )
 
             if not foreign_sockets or current_y - foreign_sockets[0].y == 0:
                 del reroute_paths[path]
@@ -510,7 +551,8 @@ def align_reroutes_with_sockets(cluster_graph: ClusterGraph) -> None:
             current_y -= movement
             if movement < 0:
                 above_y_vals = [
-                    (above_node := vertex.col[vertex.col.index(vertex) - 1]).y - above_node.height
+                    (above_node := vertex.col[vertex.col.index(vertex) - 1]).y
+                    - above_node.height
                     for vertex in path
                     if vertex != vertex.col[0]
                 ]
@@ -518,7 +560,9 @@ def align_reroutes_with_sockets(cluster_graph: ClusterGraph) -> None:
                     continue
             else:
                 below_y_vals = [
-                    vertex.col[vertex.col.index(vertex) + 1].y for vertex in path if vertex != vertex.col[-1]
+                    vertex.col[vertex.col.index(vertex) + 1].y
+                    for vertex in path
+                    if vertex != vertex.col[-1]
                 ]
                 if below_y_vals and max(below_y_vals) > current_y - path[0].height:
                     continue
@@ -543,11 +587,11 @@ def frame_padding_of_col(
 ) -> float:
     """
     Calculate additional spacing needed between columns due to frame nesting.
-    
+
     Determines extra horizontal spacing required between adjacent columns
     when they contain nodes in different frame hierarchies. The spacing
     accounts for the visual nesting depth of frames.
-    
+
     Parameters
     ----------
     columns : Sequence[Collection[GNode]]
@@ -556,12 +600,12 @@ def frame_padding_of_col(
         Index of the current column.
     tree : nx.DiGraph[GNode | Cluster]
         The cluster tree representing frame hierarchies.
-        
+
     Returns
     -------
     float
         Additional spacing in pixels needed between column column_index and column_index+1.
-        
+
     Notes
     -----
     Uses the longest path algorithm on cluster differences to determine
@@ -578,8 +622,12 @@ def frame_padding_of_col(
     if not clusters1 ^ clusters2:
         return 0
 
-    subtree1 = tree.subgraph(chain(clusters1, *[nx.ancestors(tree, cluster) for cluster in clusters1])).copy()
-    subtree2 = tree.subgraph(chain(clusters2, *[nx.ancestors(tree, cluster) for cluster in clusters2])).copy()
+    subtree1 = tree.subgraph(
+        chain(clusters1, *[nx.ancestors(tree, cluster) for cluster in clusters1])
+    ).copy()
+    subtree2 = tree.subgraph(
+        chain(clusters2, *[nx.ancestors(tree, cluster) for cluster in clusters2])
+    ).copy()
 
     for *edge_nodes, edge_data in subtree1.edges(data=True):
         edge_data["weight"] = int(edge_nodes not in subtree2.edges)  # type: ignore
@@ -587,7 +635,9 @@ def frame_padding_of_col(
     for *edge_nodes, edge_data in subtree2.edges(data=True):
         edge_data["weight"] = int(edge_nodes not in subtree1.edges)  # type: ignore
 
-    distance = nx.dag_longest_path_length(subtree1) + nx.dag_longest_path_length(subtree2)  # type: ignore
+    distance = nx.dag_longest_path_length(subtree1) + nx.dag_longest_path_length(
+        subtree2
+    )  # type: ignore
     return frame_padding() * distance
 
 
@@ -596,11 +646,11 @@ def assign_x_coords(
 ) -> None:
     """
     Assign horizontal coordinates to all nodes based on their columns.
-    
+
     Positions nodes horizontally by column, with dynamic spacing that
     accounts for node widths, edge bend requirements, and frame nesting.
     Includes intelligent spacing adjustments for long edges.
-    
+
     Parameters
     ----------
     graph : nx.DiGraph[GNode]
@@ -609,7 +659,7 @@ def assign_x_coords(
         The cluster tree for frame hierarchy information.
     x_spacing : float, default=50.0
         Base horizontal spacing between columns in pixels.
-        
+
     Notes
     -----
     Uses adaptive spacing based on edge characteristics - longer edges
@@ -622,18 +672,25 @@ def assign_x_coords(
         max_width = max([vertex.width for vertex in column])
 
         for vertex in column:
-            vertex.x = current_x if vertex.is_reroute else current_x - (vertex.width - max_width) / 2
+            vertex.x = (
+                current_x
+                if vertex.is_reroute
+                else current_x - (vertex.width - max_width) / 2
+            )
 
         # https://doi.org/10.7155/jgaa.00220 (p. 139)
         delta_spacing = sum(
             [
                 1
                 for *_, edge_data in graph.out_edges(column, data=True)
-                if abs(edge_data[TO_SOCKET].y - edge_data[FROM_SOCKET].y) >= x_spacing * 3
+                if abs(edge_data[TO_SOCKET].y - edge_data[FROM_SOCKET].y)
+                >= x_spacing * 3
             ]
         )
         spacing = (1 + min(delta_spacing / 4, 2)) * x_spacing
-        current_x += max_width + spacing + frame_padding_of_col(columns, column_index, tree)
+        current_x += (
+            max_width + spacing + frame_padding_of_col(columns, column_index, tree)
+        )
 
 
 def is_unnecessary_bend_point(
@@ -644,10 +701,10 @@ def is_unnecessary_bend_point(
 ) -> bool:
     """
     Determine if a bend point would be unnecessary for edge routing.
-    
+
     Checks whether adding a bend point at a socket would actually help
     avoid node overlaps or if the edge can be routed cleanly without it.
-    
+
     Parameters
     ----------
     socket : Socket
@@ -658,12 +715,12 @@ def is_unnecessary_bend_point(
         Horizontal spacing buffer around nodes.
     y_spacing : float, default=25.0
         Vertical spacing buffer around nodes.
-        
+
     Returns
     -------
     bool
         True if the bend point would be unnecessary, False if it's needed.
-        
+
     Notes
     -----
     The function considers neighboring nodes in the same column and checks
@@ -679,7 +736,9 @@ def is_unnecessary_bend_point(
     is_above = other_socket.y > socket.y
 
     try:
-        neighbor = vertex.col[vertex_index - 1] if is_above else vertex.col[vertex_index + 1]
+        neighbor = (
+            vertex.col[vertex_index - 1] if is_above else vertex.col[vertex_index + 1]
+        )
     except IndexError:
         return True
 
@@ -687,7 +746,11 @@ def is_unnecessary_bend_point(
         return True
 
     neighbor_x_offset, neighbor_y_offset = x_spacing / 2, y_spacing / 2
-    neighbor_y = neighbor.y - neighbor.height - neighbor_y_offset if is_above else neighbor.y + neighbor_y_offset
+    neighbor_y = (
+        neighbor.y - neighbor.height - neighbor_y_offset
+        if is_above
+        else neighbor.y + neighbor_y_offset
+    )
 
     assert neighbor.cluster
     if neighbor.cluster.node and neighbor.cluster != vertex.cluster:
@@ -697,7 +760,10 @@ def is_unnecessary_bend_point(
         else:
             neighbor_y += frame_padding() + neighbor.cluster.label_height()
 
-    line_a = ((neighbor.x - neighbor_x_offset, neighbor_y), (neighbor.x + neighbor.width + neighbor_x_offset, neighbor_y))
+    line_a = (
+        (neighbor.x - neighbor_x_offset, neighbor_y),
+        (neighbor.x + neighbor.width + neighbor_x_offset, neighbor_y),
+    )
     line_b = ((socket.x, socket.y), (other_socket.x, other_socket.y))
     return intersect_line_line_2d(*line_a, *line_b) is None
 
@@ -715,11 +781,11 @@ def add_bend_points(
 ) -> None:
     """
     Add bend points for edges connected to a node to avoid visual conflicts.
-    
+
     Creates dummy nodes positioned at the edge of a node to provide clean
     edge routing. Bend points help edges avoid overlapping with node bodies
     and provide cleaner visual connections.
-    
+
     Parameters
     ----------
     graph : nx.MultiDiGraph[GNode]
@@ -732,7 +798,7 @@ def add_bend_points(
         Horizontal spacing for collision detection.
     y_spacing : float, default=25.0
         Vertical spacing for collision detection.
-        
+
     Notes
     -----
     Bend points are only created when:
@@ -771,22 +837,22 @@ def node_overlaps_edge(
 ) -> bool:
     """
     Check if a node's bounding box intersects with an edge line.
-    
+
     Tests whether a straight line edge would visually overlap with a node's
     rectangular boundary, used to determine if edge routing is needed.
-    
+
     Parameters
     ----------
     vertex : GNode
         The node to check for overlap.
     edge_line : tuple[tuple[float, float], tuple[float, float]]
         Line segment defined by two (x, y) coordinate pairs.
-        
+
     Returns
     -------
     bool
         True if the edge line intersects the node's bounding box.
-        
+
     Notes
     -----
     Only checks top and bottom edges of the node rectangle. Reroute nodes
@@ -817,11 +883,11 @@ def route_edges(
 ) -> None:
     """
     Create bend points for all edges to enable clean visual routing.
-    
+
     Processes the entire graph to add bend points where needed, optimizes
     bend point sharing between similar edges, and handles special cases
     like reroute fan-out patterns.
-    
+
     Parameters
     ----------
     graph : nx.MultiDiGraph[GNode]
@@ -832,7 +898,7 @@ def route_edges(
         Horizontal spacing for bend point placement.
     y_spacing : float, default=25.0
         Vertical spacing for bend point placement.
-        
+
     Notes
     -----
     The routing process includes several optimizations:
@@ -847,10 +913,18 @@ def route_edges(
 
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    edge_of = {bend_point: edge for edge, dummy_list in bend_points.items() for bend_point in dummy_list}
+    edge_of = {
+        bend_point: edge
+        for edge, dummy_list in bend_points.items()
+        for bend_point in dummy_list
+    }
 
     def bend_point_key(bend_point: GNode) -> tuple[Socket, float, float]:
-        return (graph.edges[edge_of[bend_point]][FROM_SOCKET], bend_point.x, bend_point.y)
+        return (
+            graph.edges[edge_of[bend_point]][FROM_SOCKET],
+            bend_point.x,
+            bend_point.y,
+        )
 
     for (target, *redundant), (from_socket, *_) in group_by(
         edge_of, key=bend_point_key
@@ -864,7 +938,10 @@ def route_edges(
             continue
 
         for edge in graph.out_edges(owner_node, keys=True):
-            if target not in bend_points[edge] and graph.edges[edge][TO_SOCKET].y == target.y:
+            if (
+                target not in bend_points[edge]
+                and graph.edges[edge][TO_SOCKET].y == target.y
+            ):
                 bend_points[edge].append(target)
 
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -882,7 +959,10 @@ def route_edges(
                 continue
 
             last_bend_point = dummy_nodes[-1]
-            line = ((last_bend_point.x, last_bend_point.y), (edge_data[TO_SOCKET].x, edge_data[TO_SOCKET].y))
+            line = (
+                (last_bend_point.x, last_bend_point.y),
+                (edge_data[TO_SOCKET].x, edge_data[TO_SOCKET].y),
+            )
             if any(node_overlaps_edge(vertex, line) for vertex in edge[1].column):
                 continue
 
@@ -906,25 +986,25 @@ def route_edges(
 def simplify_path(cluster_graph: ClusterGraph, path: list[GNode]) -> None:
     """
     Simplify a reroute path by removing unnecessary intermediate nodes.
-    
+
     Optimizes reroute paths by connecting endpoints directly when possible,
     eliminating redundant intermediate reroute nodes while preserving
     connectivity.
-    
+
     Parameters
     ----------
     cluster_graph : ClusterGraph
         The cluster graph containing the path.
     path : list[GNode]
         The reroute path to simplify.
-        
+
     Notes
     -----
     The simplification considers three cases:
     1. Input-aligned: Connect predecessor directly to end node
     2. Output-aligned: Connect start node directly to successor
     3. General case: Add dummy edge between endpoints
-    
+
     Removed nodes are also eliminated from the original path list.
     """
     if len(path) == 1:
@@ -933,14 +1013,31 @@ def simplify_path(cluster_graph: ClusterGraph, path: list[GNode]) -> None:
     start_node, *intermediate_nodes, end_node = path
     graph = cluster_graph.G
 
-    if graph.pred[start_node] and (input_socket := next(iter(graph.in_edges(start_node, data=FROM_SOCKET)))[2]).y == start_node.y:
-        graph.add_edge(input_socket.owner, end_node, from_socket=input_socket, to_socket=Socket(end_node, 0, False))
+    if (
+        graph.pred[start_node]
+        and (
+            input_socket := next(iter(graph.in_edges(start_node, data=FROM_SOCKET)))[2]
+        ).y
+        == start_node.y
+    ):
+        graph.add_edge(
+            input_socket.owner,
+            end_node,
+            from_socket=input_socket,
+            to_socket=Socket(end_node, 0, False),
+        )
         intermediate_nodes.append(start_node)
     elif (
         graph.out_degree[end_node] == 1
-        and end_node.y == (output_socket := next(iter(graph.out_edges(end_node, data=TO_SOCKET)))[2]).y
+        and end_node.y
+        == (output_socket := next(iter(graph.out_edges(end_node, data=TO_SOCKET)))[2]).y
     ):
-        graph.add_edge(start_node, output_socket.owner, from_socket=Socket(start_node, 0, True), to_socket=output_socket)
+        graph.add_edge(
+            start_node,
+            output_socket.owner,
+            from_socket=Socket(start_node, 0, True),
+            to_socket=output_socket,
+        )
         intermediate_nodes.append(end_node)
     elif intermediate_nodes:
         add_dummy_edge(graph, start_node, end_node)
@@ -954,15 +1051,15 @@ def simplify_path(cluster_graph: ClusterGraph, path: list[GNode]) -> None:
 def add_reroute(vertex: GNode) -> None:
     """
     Convert a dummy node into a real Blender reroute node.
-    
+
     Creates an actual NodeReroute in Blender and associates it with the
     dummy graph node, effectively "realizing" the dummy node.
-    
+
     Parameters
     ----------
     vertex : GNode
         The dummy node to convert to a real reroute.
-        
+
     Notes
     -----
     The created reroute inherits the cluster assignment (parent frame)
@@ -978,17 +1075,17 @@ def add_reroute(vertex: GNode) -> None:
 def realize_edges(graph: nx.DiGraph[GNode], vertex: GNode) -> None:
     """
     Create actual Blender node links for edges connected to a realized node.
-    
+
     Takes graph edges and creates corresponding Blender NodeLinks to match
     the graph structure in the actual node tree.
-    
+
     Parameters
     ----------
     graph : nx.DiGraph[GNode]
         The graph containing edge information.
     vertex : GNode
         The realized node to create links for.
-        
+
     Notes
     -----
     Only creates links between real nodes (not dummy nodes). For reroute
@@ -1009,22 +1106,24 @@ def realize_edges(graph: nx.DiGraph[GNode], vertex: GNode) -> None:
 def realize_dummy_nodes(cluster_graph: ClusterGraph) -> None:
     """
     Convert all dummy nodes in reroute paths to actual Blender reroute nodes.
-    
+
     Processes aligned reroute paths, simplifies them where possible, and
     converts any remaining dummy nodes to real reroute nodes with proper
     Blender node links.
-    
+
     Parameters
     ----------
     cluster_graph : ClusterGraph
         The cluster graph containing dummy nodes to realize.
-        
+
     Notes
     -----
     This is a critical step in the layout process that bridges between
     the abstract graph representation and the concrete Blender node tree.
     """
-    for path in get_reroute_paths(cluster_graph, is_safe_to_remove, must_be_aligned=True):
+    for path in get_reroute_paths(
+        cluster_graph, is_safe_to_remove, must_be_aligned=True
+    ):
         simplify_path(cluster_graph, path)
 
         for vertex in path:
@@ -1039,17 +1138,17 @@ def restore_multi_input_orders(
 ) -> None:
     """
     Restore the original connection order for multi-input sockets.
-    
+
     Uses previously saved multi-input socket orders to recreate the original
     connection sequence after layout operations may have changed the link order.
-    
+
     Parameters
     ----------
     graph : nx.MultiDiGraph[GNode]
         The graph containing the current connections.
     ntree : NodeTree, optional
         The Blender node tree. If None, uses the current active node tree.
-        
+
     Notes
     -----
     This function handles complex cases involving reroute nodes by tracing
@@ -1097,20 +1196,22 @@ def restore_multi_input_orders(
             seen_sockets.add(from_socket)
 
 
-def realize_locations(graph: nx.DiGraph[GNode], old_center: Vector, ntree: NodeTree) -> None:
+def realize_locations(
+    graph: nx.DiGraph[GNode], old_center: Vector, ntree: NodeTree
+) -> None:
     """
     Apply computed node positions to actual Blender nodes.
-    
+
     Transfers the calculated x,y coordinates from the graph nodes to their
     corresponding Blender nodes, maintaining the overall center position.
-    
+
     Parameters
     ----------
     graph : nx.DiGraph[GNode]
         The graph with computed node positions.
     old_center : Vector
         The original center point of the selected nodes.
-        
+
     Notes
     -----
     The function:
@@ -1124,7 +1225,7 @@ def realize_locations(graph: nx.DiGraph[GNode], old_center: Vector, ntree: NodeT
         fmean([vertex.y for vertex in graph]),
     )
     offset_x, offset_y = -Vector(new_center) + old_center
-    
+
     # Collect all nodes for the move function
     all_nodes = list(ntree.nodes)
 
@@ -1138,12 +1239,7 @@ def realize_locations(graph: nx.DiGraph[GNode], old_center: Vector, ntree: NodeT
         current_x, current_y = vertex.node.location
         vertex.x += offset_x
         vertex.y += offset_y
-        move(
-            vertex.node,
-            x_offset=vertex.x - current_x,
-            y_offset=vertex.corrected_y() - current_y,
-            all_nodes=all_nodes,
-        )
+        vertex.node.location = (vertex.x, vertex.corrected_y())
 
         vertex.node.parent = vertex.cluster.node
 
@@ -1151,17 +1247,17 @@ def realize_locations(graph: nx.DiGraph[GNode], old_center: Vector, ntree: NodeT
 def resize_unshrunken_frame(cluster_graph: ClusterGraph, cluster: Cluster) -> None:
     """
     Resize node frames that are set to not shrink automatically.
-    
+
     For frames with shrink=False, temporarily enables shrinking to allow
     the frame to resize to fit its contents, then restores the setting.
-    
+
     Parameters
     ----------
     cluster_graph : ClusterGraph
         The cluster graph containing the frame.
     cluster : Cluster
         The cluster representing the frame to resize.
-        
+
     Notes
     -----
     This workaround is needed because Blender frames with shrink=False
@@ -1192,11 +1288,11 @@ def sugiyama_layout(
 ) -> None:
     """
     Apply the complete Sugiyama layout algorithm to selected nodes.
-    
+
     This is the main entry point that orchestrates the full Sugiyama framework
     layout process for Blender nodes. It handles the complete pipeline from
     graph construction through final node positioning and link creation.
-    
+
     Parameters
     ----------
     ntree : NodeTree
@@ -1205,33 +1301,33 @@ def sugiyama_layout(
         Vertical spacing between node rows in pixels.
     horizontal_spacing : float, default=50.0
         Horizontal spacing between node columns in pixels.
-        
+
     Notes
     -----
     The algorithm follows these main phases:
-    
+
     1. **Graph Construction**: Convert selected nodes to graph representation
-    2. **Preprocessing**: Handle reroutes and save multi-input orders  
+    2. **Preprocessing**: Handle reroutes and save multi-input orders
     3. **Ranking**: Assign hierarchical ranks to nodes
     4. **Crossing Minimization**: Reduce edge crossings between layers
     5. **Coordinate Assignment**: Position nodes with proper spacing
     6. **Edge Routing**: Add bend points for clean edge visualization
     7. **Realization**: Convert graph back to actual Blender nodes and links
-    
+
     The function preserves the original center point of the selected nodes
     and handles special cases like frame hierarchies and multi-input sockets.
-    
+
     If no nodes are selected or no valid layout can be computed, the function
     returns early without making changes.
-    
+
     Examples
     --------
     Basic usage with default spacing:
-    
+
     >>> sugiyama_layout(bpy.context.space_data.node_tree)
-    
+
     Custom spacing for tighter layout:
-    
+
     >>> sugiyama_layout(ntree, vertical_spacing=30, horizontal_spacing=40)
     """
     # Get all non-frame nodes for layout
